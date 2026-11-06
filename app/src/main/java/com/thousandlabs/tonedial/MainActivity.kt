@@ -48,6 +48,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        com.thousandlabs.tonedial.update.Updater.autoCheck()
         setContent {
             ToneDialTheme {
                 var granted by remember { mutableStateOf(hasAudioPermission()) }
@@ -121,7 +122,7 @@ private fun PermissionScreen(showSettings: Boolean, onAsk: () -> Unit, onSetting
         Text("Bienvenue sur Tone Dial", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(10.dp))
         Text(
-            "Pour afficher vos musiques, Tone Dial a besoin d'accéder aux fichiers audio du téléphone. Rien ne quitte votre appareil : l'appli n'a pas accès à Internet.",
+            "Pour afficher vos musiques, Tone Dial a besoin d'accéder aux fichiers audio du téléphone. Vos musiques restent sur votre appareil.",
             textAlign = TextAlign.Center,
             color = TdColors.TextDim,
             style = MaterialTheme.typography.bodyMedium,

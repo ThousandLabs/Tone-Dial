@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.thousandlabs.tonedial.BuildConfig
 import com.thousandlabs.tonedial.playback.AudioFx
+import com.thousandlabs.tonedial.update.Updater
 
 const val REPO_URL = "https://github.com/ThousandLabs/Tone-Dial"
 const val LATEST_APK_URL = "$REPO_URL/releases/latest/download/ToneDial.apk"
@@ -254,8 +255,10 @@ private val guide = listOf(
     GuideSection(
         Icons.Outlined.SystemUpdate, "Mises à jour",
         listOf(
-            "Menu > À propos et mises à jour > « Télécharger la dernière version ».",
-            "Ouvrez le fichier téléchargé et appuyez sur « Mettre à jour ». Vos playlists, favoris et réglages sont conservés.",
+            "Quand une nouvelle version existe, un bandeau apparaît en haut de l'accueil. Appuyez sur « Mettre à jour », puis confirmez dans la fenêtre d'Android : c'est tout.",
+            "La première fois, Android demande d'autoriser Tone Dial à installer des applications. Activez l'option, revenez, et la mise à jour démarre toute seule.",
+            "Vous pouvez aussi vérifier vous-même dans Menu > À propos et mises à jour. La vérification automatique se désactive au même endroit.",
+            "Vos playlists, favoris et réglages sont conservés.",
         ),
     ),
 )
@@ -335,7 +338,7 @@ fun AboutScreen(nav: Nav) {
                     Text("Version ${BuildConfig.VERSION_NAME}", color = TdColors.TextDim, style = MaterialTheme.typography.bodySmall)
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        "Lecteur de musique hors ligne, sans publicité et sans connexion Internet.",
+                        "Lecteur de musique hors ligne et sans publicité.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = TdColors.TextDim,
                     )
@@ -344,24 +347,177 @@ fun AboutScreen(nav: Nav) {
             }
             item {
                 SectionLabel("Mises à jour")
-                ListItemRow(
-                    Icons.Outlined.SystemUpdate, "Télécharger la dernière version",
-                    subtitle = "Ouvrez ensuite le fichier et appuyez sur « Mettre à jour »",
-                    tint = TdColors.Accent,
-                    onClick = { open(LATEST_APK_URL) },
-                )
+                UpdateSection()
                 ListItemRow(Icons.Outlined.NewReleases, "Historique des versions", subtitle = "Nouveautés de chaque version", onClick = { open(RELEASES_URL) })
                 SectionLabel("Liens officiels")
                 ListItemRow(Icons.Outlined.Code, "Dépôt GitHub", subtitle = REPO_URL.removePrefix("https://"), onClick = { open(REPO_URL) })
                 ListItemRow(Icons.Outlined.Language, "Site Thousand Labs", subtitle = SITE_URL.removePrefix("https://"), onClick = { open(SITE_URL) })
                 SectionLabel("Confidentialité")
                 Text(
-                    "Tone Dial ne demande pas l'accès à Internet. Vos musiques, playlists, favoris et statistiques d'écoute restent uniquement sur votre téléphone.",
+                    "Vos musiques, playlists, favoris et statistiques d'écoute restent uniquement sur votre téléphone. Tone Dial ne contient aucune publicité. La connexion Internet sert uniquement à vérifier et télécharger les mises à jour depuis GitHub, en arrière-plan, et peut être désactivée ci-dessus.",
                     modifier = Modifier.padding(horizontal = 20.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = TdColors.TextDim,
                 )
             }
         }
+    }
+}
+
+// ------------------------------------------------------------------
+// Mises à jour intégrées
+// ------------------------------------------------------------------
+
+/**
+ * Lance la mise à jour, en demandant d'abord (une seule fois) l'autorisation
+ * d'installer des applications. Reprend tout seul au retour des paramètres.
+ */
+@Composable
+fun rememberUpdateLauncher(): () -> Unit {
+    val context = LocalContext.current
+    var askPermission by remember { mutableStateOf(false) }
+    var pending by remember { mutableStateOf(false) }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME && pending && Updater.canInstall(context)) {
+                pending = false
+                Updater.downloadAndInstall(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
+
+    if (askPermission) {
+        AlertDialog(
+            onDismissRequest = { askPermission = false },
+            title = { Text("Une autorisation, une seule fois") },
+            text = {
+                Text("Pour se mettre à jour toute seule, Tone Dial doit être autorisée à installer des applications. Sur l'écran suivant, activez « Autoriser depuis cette source », puis revenez : la mise à jour démarrera automatiquement.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    askPermission = false
+                    pending = true
+                    runCatching { context.startActivity(Updater.installPermissionIntent(context)) }
+                }) { Text("Continuer") }
+            },
+            dismissButton = { TextButton(onClick = { askPermission = false }) { Text("Plus tard") } },
+            containerColor = TdColors.Surface,
+        )
+    }
+
+    return {
+        if (Updater.canInstall(context)) Updater.downloadAndInstall(context) else askPermission = true
+    }
+}
+
+/** Bandeau affiché en haut de l'accueil quand une nouvelle version existe. */
+@Composable
+fun UpdateBanner() {
+    val state by Updater.state.collectAsStateWithLifecycle()
+    val dismissed by Updater.bannerDismissed.collectAsStateWithLifecycle()
+    val launch = rememberUpdateLauncher()
+
+    val release: Updater.State.Available? = when (val s = state) {
+        is Updater.State.Available -> s
+        is Updater.State.Downloading -> s.release
+        is Updater.State.Installing -> s.release
+        is Updater.State.Error -> s.release
+        else -> null
+    }
+    if (release == null || (dismissed && state is Updater.State.Available)) return
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(TdColors.SurfaceHigh)
+            .padding(start = 14.dp, end = 6.dp, top = 10.dp, bottom = 10.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.SystemUpdate, null, tint = TdColors.Accent, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Version ${release.versionName} disponible", style = MaterialTheme.typography.titleMedium)
+                val sub = when (val s = state) {
+                    is Updater.State.Downloading -> "Téléchargement… ${(s.progress * 100).toInt()} %"
+                    is Updater.State.Installing -> "Confirmez l'installation dans la fenêtre d'Android"
+                    is Updater.State.Error -> s.message
+                    else -> release.notes.lineSequence().firstOrNull { it.isNotBlank() } ?: "Améliorations et corrections"
+                }
+                Text(sub, style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim, maxLines = 2)
+            }
+            when (state) {
+                is Updater.State.Downloading, is Updater.State.Installing -> Unit
+                is Updater.State.Error -> TextButton(onClick = launch) { Text("Réessayer") }
+                else -> {
+                    TextButton(onClick = launch) { Text("Mettre à jour") }
+                    IconButton(onClick = { Updater.dismissBanner() }) {
+                        Icon(Icons.Outlined.Close, "Plus tard", tint = TdColors.TextDim, modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
+        }
+        val s = state
+        if (s is Updater.State.Downloading) {
+            Spacer(Modifier.height(8.dp))
+            LinearProgressIndicator(
+                progress = { s.progress },
+                modifier = Modifier.fillMaxWidth().padding(end = 8.dp),
+                color = TdColors.Accent,
+                trackColor = TdColors.Divider,
+            )
+        }
+    }
+}
+
+/** Bloc « Mises à jour » de l'écran À propos. */
+@Composable
+fun UpdateSection() {
+    val state by Updater.state.collectAsStateWithLifecycle()
+    val launch = rememberUpdateLauncher()
+    var auto by remember { mutableStateOf(Updater.autoEnabled()) }
+
+    val (label, subtitle) = when (val s = state) {
+        Updater.State.Idle -> "Rechercher une mise à jour" to "Version actuelle : ${BuildConfig.VERSION_NAME}"
+        Updater.State.Checking -> "Recherche en cours…" to "Connexion à GitHub"
+        Updater.State.UpToDate -> "Tone Dial est à jour" to "Version ${BuildConfig.VERSION_NAME} · appuyez pour revérifier"
+        is Updater.State.Available -> "Installer la version ${s.versionName}" to "Téléchargement et installation en deux appuis"
+        is Updater.State.Downloading -> "Téléchargement… ${(s.progress * 100).toInt()} %" to "Version ${s.release.versionName}"
+        is Updater.State.Installing -> "Installation…" to "Confirmez dans la fenêtre d'Android"
+        is Updater.State.Error -> "Réessayer" to s.message
+    }
+    ListItemRow(
+        Icons.Outlined.SystemUpdate, label, subtitle = subtitle, tint = TdColors.Accent,
+        onClick = {
+            when (val s = state) {
+                is Updater.State.Available -> launch()
+                is Updater.State.Error -> if (s.release != null) launch() else Updater.check()
+                Updater.State.Idle, Updater.State.UpToDate -> Updater.check()
+                else -> Unit
+            }
+        },
+    )
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Vérifier automatiquement", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "Au lancement, en arrière-plan. Sans connexion, rien ne se passe et l'appli s'ouvre normalement.",
+                style = MaterialTheme.typography.bodySmall,
+                color = TdColors.TextDim,
+            )
+        }
+        Switch(
+            checked = auto,
+            onCheckedChange = { auto = it; Updater.setAutoEnabled(it) },
+            colors = SwitchDefaults.colors(checkedTrackColor = TdColors.Accent, checkedThumbColor = TdColors.Background),
+        )
     }
 }

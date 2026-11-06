@@ -1,6 +1,6 @@
 # Tone Dial
 
-Lecteur de musique Android hors ligne, sans publicité et sans connexion Internet. Une application **Thousand Labs**.
+Lecteur de musique Android hors ligne et sans publicité. Une application **Thousand Labs**.
 
 **Télécharger la dernière version : [ToneDial.apk](https://github.com/ThousandLabs/Tone-Dial/releases/latest/download/ToneDial.apk)**
 
@@ -23,6 +23,7 @@ Lecteur de musique Android hors ligne, sans publicité et sans connexion Interne
 
 ## Nouveautés
 
+- **1.4** : mises à jour intégrées en deux appuis (bandeau, téléchargement dans l'appli, confirmation Android).
 - **1.3** : bouton « Ajouter des titres » dans les playlists, qui masque les titres déjà présents pour éviter les doublons, avec recherche et sélection multiple.
 - **1.2** : sélection multiple par appui long, bouton retour qui revient à l'onglet Titres, double appui pour quitter, balayage pour changer de titre, fondu de fin de minuterie.
 - **1.1** : première version.
@@ -36,12 +37,20 @@ Lecteur de musique Android hors ligne, sans publicité et sans connexion Interne
 
 ## Mises à jour
 
-Chaque modification publiée sur ce dépôt produit automatiquement une nouvelle version dans [Releases](https://github.com/ThousandLabs/Tone-Dial/releases). Dans l'appli : Menu > À propos et mises à jour > « Télécharger la dernière version », puis « Mettre à jour ». Les playlists, favoris et réglages sont conservés.
+À partir de la version 1.4, Tone Dial se met à jour toute seule, en deux appuis :
+
+1. Au lancement, l'appli vérifie en arrière-plan si une nouvelle version existe. Si c'est le cas, un bandeau apparaît en haut de l'accueil.
+2. Appuyez sur « Mettre à jour » : l'appli télécharge la nouvelle version elle-même.
+3. Confirmez dans la fenêtre d'Android.
+
+La première fois, Android demande d'autoriser Tone Dial à installer des applications. Sans connexion, rien ne se passe et l'appli s'ouvre normalement. La vérification automatique peut être désactivée dans Menu > À propos et mises à jour. Les playlists, favoris et réglages sont conservés.
+
+Chaque modification publiée sur ce dépôt produit automatiquement une nouvelle version dans [Releases](https://github.com/ThousandLabs/Tone-Dial/releases).
 
 ## Technique
 
 - Kotlin, Jetpack Compose (Material 3), Media3 / ExoPlayer
 - Compilation et signature automatiques par GitHub Actions (`.github/workflows/build.yml`)
-- Aucune autorisation Internet : toutes les données restent sur le téléphone
+- Aucune publicité. Internet sert uniquement aux mises à jour (GitHub) ; toutes les données restent sur le téléphone
 
 Site : [thousandlabs.github.io](https://thousandlabs.github.io)

@@ -93,6 +93,8 @@ fun HomeScreen(vm: MainViewModel, nav: Nav) {
             colors = TopAppBarDefaults.topAppBarColors(containerColor = TdColors.Background),
         )
 
+        UpdateBanner()
+
         ScrollableTabRow(
             selectedTabIndex = pager.currentPage,
             containerColor = TdColors.Background,
