@@ -1,0 +1,2 @@
+-keep class com.thousandlabs.tonedial.** { *; }
+-dontwarn org.jetbrains.annotations.**

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="td_background">#FF0D1017</color>
+    <color name="td_surface">#FF171B24</color>
+    <color name="td_accent">#FFF2B544</color>
+    <color name="td_text">#FFEDEFF4</color>
+    <color name="td_text_dim">#FF9AA1B2</color>
+</resources>

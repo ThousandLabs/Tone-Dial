@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Anneau extérieur du cadran -->
+    <path
+        android:pathData="M54,30a24,24 0,1 1,0 48a24,24 0,1 1,0 -48z"
+        android:strokeWidth="4"
+        android:strokeColor="#F2B544"
+        android:fillColor="#00000000" />
+    <!-- Ondes sonores internes -->
+    <path
+        android:pathData="M49,47 L49,61 M54,42 L54,66 M59,47 L59,61 M64,51 L64,57"
+        android:strokeWidth="3.6"
+        android:strokeLineCap="round"
+        android:strokeColor="#EDEFF4" />
+    <path
+        android:pathData="M44,51 L44,57"
+        android:strokeWidth="3.6"
+        android:strokeLineCap="round"
+        android:strokeColor="#EDEFF4" />
+    <!-- Repère du cadran -->
+    <path
+        android:pathData="M54,24 L54,31"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:strokeColor="#F2B544" />
+</vector>
