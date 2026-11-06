@@ -24,6 +24,7 @@ import com.thousandlabs.tonedial.data.Playlist
 import com.thousandlabs.tonedial.data.Song
 import com.thousandlabs.tonedial.data.art
 import com.thousandlabs.tonedial.data.formatDuration
+import kotlinx.coroutines.launch
 
 sealed interface Screen {
     data object Home : Screen
@@ -39,40 +40,69 @@ sealed interface Screen {
     data object About : Screen
 }
 
-/** Actions communes transmises aux écrans. */
+/** Actions et états communs transmis aux écrans. */
 class Nav(
     val go: (Screen) -> Unit,
     val back: () -> Unit,
     val openMenu: (Song, Playlist?) -> Unit,
     val openPlayer: () -> Unit,
+    val selection: Selection,
+    val flags: UiFlags,
 )
 
 @Composable
 fun AppRoot(vm: MainViewModel) {
     var stack by remember { mutableStateOf(listOf<Screen>(Screen.Home)) }
-    var playerOpen by remember { mutableStateOf(false) }
+    val flags = remember { UiFlags() }
+    val selection = remember { Selection() }
     var menuFor by remember { mutableStateOf<Pair<Song, Playlist?>?>(null) }
+    var lastBackPress by remember { mutableLongStateOf(0L) }
     val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val activity = LocalContext.current as? android.app.Activity
 
     val player by vm.player.collectAsStateWithLifecycle()
     val songMap by vm.songMap.collectAsStateWithLifecycle()
     val current = player.currentId?.let { songMap[it] }
 
     LaunchedEffect(Unit) {
-        vm.messages.collect { snackbar.showSnackbar(it) }
+        vm.messages.collect {
+            snackbar.currentSnackbarData?.dismiss()
+            snackbar.showSnackbar(it)
+        }
     }
 
     val nav = remember {
         Nav(
-            go = { s -> stack = stack + s; playerOpen = false },
-            back = { if (stack.size > 1) stack = stack.dropLast(1) },
+            go = { s -> selection.clear(); stack = stack + s; flags.playerOpen = false },
+            back = { selection.clear(); if (stack.size > 1) stack = stack.dropLast(1) },
             openMenu = { song, pl -> menuFor = song to pl },
-            openPlayer = { playerOpen = true },
+            openPlayer = { flags.playerOpen = true },
+            selection = selection,
+            flags = flags,
         )
     }
 
-    BackHandler(enabled = playerOpen || stack.size > 1) {
-        if (playerOpen) playerOpen = false else stack = stack.dropLast(1)
+    // Retour : ferme le lecteur, annule la sélection, ou revient à l'écran précédent
+    BackHandler(enabled = flags.playerOpen || selection.active || stack.size > 1) {
+        when {
+            flags.playerOpen -> flags.playerOpen = false
+            selection.active -> selection.clear()
+            else -> stack = stack.dropLast(1)
+        }
+    }
+    // Sur l'accueil : deux appuis rapprochés pour quitter
+    BackHandler(enabled = !flags.playerOpen && !selection.active && stack.size == 1) {
+        val now = System.currentTimeMillis()
+        if (now - lastBackPress < 2000) {
+            activity?.finish()
+        } else {
+            lastBackPress = now
+            scope.launch {
+                snackbar.currentSnackbarData?.dismiss()
+                snackbar.showSnackbar("Appuyez encore une fois pour quitter", duration = SnackbarDuration.Short)
+            }
+        }
     }
 
     Scaffold(
@@ -100,26 +130,105 @@ fun AppRoot(vm: MainViewModel) {
                         Screen.Guide -> GuideScreen(nav)
                         Screen.About -> AboutScreen(nav)
                     }
+                    if (selection.active) {
+                        SelectionBar(vm, selection)
+                    }
                 }
                 if (current != null) {
-                    MiniPlayer(song = current, ui = player, vm = vm, onOpen = { playerOpen = true })
+                    MiniPlayer(song = current, ui = player, vm = vm, onOpen = { flags.playerOpen = true })
                 }
             }
 
             AnimatedVisibility(
-                visible = playerOpen && current != null,
+                visible = flags.playerOpen && current != null,
                 enter = slideInVertically { it },
                 exit = slideOutVertically { it },
             ) {
                 if (current != null) {
-                    PlayerScreen(vm = vm, nav = nav, song = current, ui = player, onClose = { playerOpen = false })
+                    PlayerScreen(vm = vm, nav = nav, song = current, ui = player, onClose = { flags.playerOpen = false })
                 }
             }
         }
     }
 
     menuFor?.let { (song, pl) ->
-        SongMenuSheet(vm = vm, nav = nav, song = song, playlist = pl, onDismiss = { menuFor = null }, closePlayer = { playerOpen = false })
+        SongMenuSheet(vm = vm, nav = nav, song = song, playlist = pl, onDismiss = { menuFor = null }, closePlayer = { flags.playerOpen = false })
+    }
+}
+
+/** Barre affichée en haut pendant une sélection multiple. */
+@Composable
+private fun SelectionBar(vm: MainViewModel, selection: Selection) {
+    val playlists by vm.playlists.collectAsStateWithLifecycle()
+    val favorites by vm.favorites.collectAsStateWithLifecycle()
+    var menu by remember { mutableStateOf(false) }
+    var pickPlaylist by remember { mutableStateOf(false) }
+
+    if (pickPlaylist) {
+        AddToPlaylistDialog(
+            playlists = playlists,
+            onDismiss = { pickPlaylist = false },
+            onPick = { vm.addToPlaylist(it, selection.songs()); pickPlaylist = false; selection.clear() },
+            onCreate = { vm.createPlaylist(it, selection.songs()); pickPlaylist = false; selection.clear() },
+        )
+    }
+
+    Surface(color = TdColors.SurfaceHigh, shadowElevation = 6.dp, modifier = Modifier.fillMaxWidth()) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(64.dp)
+                .padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = { selection.clear() }) { Icon(Icons.Outlined.Close, "Annuler la sélection") }
+            Text(
+                if (selection.count == 1) "1 sélectionné" else "${selection.count} sélectionnés",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = { selection.selectAll() }) {
+                Icon(
+                    Icons.Outlined.SelectAll,
+                    if (selection.allSelected) "Tout désélectionner" else "Tout sélectionner",
+                    tint = if (selection.allSelected) TdColors.Accent else TdColors.Text,
+                )
+            }
+            IconButton(onClick = { pickPlaylist = true }) { Icon(Icons.Outlined.PlaylistAdd, "Ajouter à une playlist", tint = TdColors.Accent) }
+            Box {
+                IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "Plus d'actions") }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, containerColor = TdColors.SurfaceHigh) {
+                    DropdownMenuItem(
+                        text = { Text("Lire maintenant") },
+                        leadingIcon = { Icon(Icons.Outlined.PlayArrow, null) },
+                        onClick = { menu = false; vm.play(selection.songs()); selection.clear() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Lire ensuite") },
+                        leadingIcon = { Icon(Icons.Outlined.PlaylistPlay, null) },
+                        onClick = { menu = false; vm.playNext(selection.songs()); selection.clear() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Ajouter à la file d'attente") },
+                        leadingIcon = { Icon(Icons.Outlined.AddToQueue, null) },
+                        onClick = { menu = false; vm.addToQueue(selection.songs()); selection.clear() },
+                    )
+                    val allFav = selection.songs().all { it.id in favorites }
+                    DropdownMenuItem(
+                        text = { Text(if (allFav) "Retirer des favoris" else "Ajouter aux favoris") },
+                        leadingIcon = { Icon(if (allFav) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder, null) },
+                        onClick = { menu = false; vm.setFavorites(selection.songs(), !allFav); selection.clear() },
+                    )
+                    selection.playlist?.let { p ->
+                        DropdownMenuItem(
+                            text = { Text("Retirer de « ${p.name} »") },
+                            leadingIcon = { Icon(Icons.Outlined.RemoveCircleOutline, null) },
+                            onClick = { menu = false; vm.removeFromPlaylist(p, selection.songs()); selection.clear() },
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -196,7 +305,7 @@ fun SongMenuSheet(
                     )
                     if (playlist != null) {
                         ListItemRow(Icons.Outlined.RemoveCircleOutline, "Retirer de « ${playlist.name} »", onClick = {
-                            vm.removeFromPlaylist(playlist, song); onDismiss()
+                            vm.removeFromPlaylist(playlist, listOf(song)); onDismiss()
                         })
                     }
                     ListItemRow(Icons.Outlined.Album, "Voir l'album", subtitle = song.album, onClick = {

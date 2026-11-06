@@ -23,6 +23,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.MusicNote
@@ -108,25 +111,42 @@ fun SongRow(
     isCurrent: Boolean,
     onClick: () -> Unit,
     onMore: () -> Unit,
+    onLongClick: () -> Unit = onMore,
+    selected: Boolean = false,
+    selectionMode: Boolean = false,
     trailingInfo: String? = null,
     leadingNumber: Int? = null,
 ) {
     Row(
         Modifier
             .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = onMore)
+            .background(if (selected) TdColors.AccentDim else androidx.compose.ui.graphics.Color.Transparent)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (leadingNumber != null) {
-            Text(
-                leadingNumber.toString(),
-                modifier = Modifier.width(28.dp),
-                color = if (isCurrent) TdColors.Accent else TdColors.TextDim,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        } else {
-            Artwork(song.art(), size = 48.dp)
+        Box(contentAlignment = Alignment.Center) {
+            if (leadingNumber != null && !selected) {
+                Text(
+                    leadingNumber.toString(),
+                    modifier = Modifier.width(28.dp),
+                    color = if (isCurrent) TdColors.Accent else TdColors.TextDim,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            } else if (leadingNumber == null) {
+                Artwork(song.art(), size = 48.dp)
+            }
+            if (selected) {
+                Box(
+                    Modifier
+                        .size(if (leadingNumber != null) 28.dp else 48.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(TdColors.Accent.copy(alpha = 0.85f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Outlined.Check, "Sélectionné", tint = TdColors.Background, modifier = Modifier.size(22.dp))
+                }
+            }
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
@@ -146,10 +166,45 @@ fun SongRow(
                 color = TdColors.TextDim,
             )
         }
-        IconButton(onClick = onMore) {
-            Icon(Icons.Outlined.MoreVert, contentDescription = "Options", tint = TdColors.TextDim)
+        if (selectionMode) {
+            Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                Icon(
+                    if (selected) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+                    null,
+                    tint = if (selected) TdColors.Accent else TdColors.TextDim,
+                )
+            }
+        } else {
+            IconButton(onClick = onMore) {
+                Icon(Icons.Outlined.MoreVert, contentDescription = "Options", tint = TdColors.TextDim)
+            }
         }
     }
+}
+
+/** Ligne de morceau reliée à la sélection multiple : appui long pour sélectionner. */
+@Composable
+fun SelectableSongRow(
+    song: Song,
+    index: Int,
+    pool: List<Song>,
+    nav: Nav,
+    vm: MainViewModel,
+    currentId: Long?,
+    playlist: Playlist? = null,
+    leadingNumber: Int? = null,
+) {
+    val sel = nav.selection
+    SongRow(
+        song = song,
+        isCurrent = song.id == currentId,
+        selected = sel.isSelected(song.id),
+        selectionMode = sel.active,
+        onClick = { if (sel.active) sel.toggle(song, pool, playlist) else vm.play(pool, index) },
+        onLongClick = { sel.toggle(song, pool, playlist) },
+        onMore = { nav.openMenu(song, playlist) },
+        leadingNumber = leadingNumber,
+    )
 }
 
 @Composable

@@ -2,6 +2,7 @@
 
 package com.thousandlabs.tonedial.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -43,6 +44,14 @@ fun HomeScreen(vm: MainViewModel, nav: Nav) {
     val pager = rememberPagerState(pageCount = { tabs.size })
     val scope = rememberCoroutineScope()
     var menu by remember { mutableStateOf(false) }
+
+    // Changer d'onglet annule la sélection en cours
+    LaunchedEffect(pager.currentPage) { nav.selection.clear() }
+
+    // Retour depuis un autre onglet : revenir à « Titres » au lieu de quitter
+    BackHandler(enabled = pager.currentPage != 0 && !nav.selection.active && !nav.flags.playerOpen) {
+        scope.launch { pager.animateScrollToPage(0) }
+    }
 
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
@@ -172,12 +181,7 @@ private fun SongsTab(vm: MainViewModel, nav: Nav) {
             }
         }
         itemsIndexed(songs, key = { _, s -> s.id }) { i, song ->
-            SongRow(
-                song = song,
-                isCurrent = song.id == player.currentId,
-                onClick = { vm.play(songs, i) },
-                onMore = { nav.openMenu(song, null) },
-            )
+            SelectableSongRow(song, i, songs, nav, vm, player.currentId)
         }
     }
 }
@@ -412,11 +416,8 @@ fun SongCollectionScreen(
                 }
             }
             itemsIndexed(songs, key = { i, s -> "${s.id}_$i" }) { i, song ->
-                SongRow(
-                    song = song,
-                    isCurrent = song.id == player.currentId,
-                    onClick = { vm.play(songs, i) },
-                    onMore = { nav.openMenu(song, playlist) },
+                SelectableSongRow(
+                    song, i, songs, nav, vm, player.currentId, playlist,
                     leadingNumber = if (numbered) (if (song.track > 0) song.track else i + 1) else null,
                 )
             }
@@ -616,7 +617,7 @@ fun SearchScreen(vm: MainViewModel, nav: Nav) {
             if (foundSongs.isNotEmpty()) {
                 item { SectionLabel("Titres") }
                 itemsIndexed(foundSongs, key = { _, s -> "s_" + s.id }) { i, s ->
-                    SongRow(s, s.id == player.currentId, onClick = { vm.play(foundSongs, i) }, onMore = { nav.openMenu(s, null) })
+                    SelectableSongRow(s, i, foundSongs, nav, vm, player.currentId)
                 }
             }
         }

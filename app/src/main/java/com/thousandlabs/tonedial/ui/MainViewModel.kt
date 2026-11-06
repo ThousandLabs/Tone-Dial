@@ -333,16 +333,31 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleFavorite(id: Long) = UserStore.toggleFavorite(id)
 
     fun createPlaylist(name: String, songs: List<Song> = emptyList()) {
-        UserStore.createPlaylist(name, songs.map { it.id })
-        _messages.tryEmit("Playlist « ${name.trim()} » créée")
+        val p = UserStore.createPlaylist(name, songs.map { it.id })
+        _messages.tryEmit(if (songs.size > 1) "Playlist « ${p.name} » créée avec ${songs.size} titres" else "Playlist « ${p.name} » créée")
     }
 
     fun addToPlaylist(p: Playlist, songs: List<Song>) {
         UserStore.addToPlaylist(p.id, songs.map { it.id })
-        _messages.tryEmit("Ajouté à « ${p.name} »")
+        _messages.tryEmit(if (songs.size == 1) "Ajouté à « ${p.name} »" else "${songs.size} titres ajoutés à « ${p.name} »")
     }
 
-    fun removeFromPlaylist(p: Playlist, song: Song) = UserStore.removeFromPlaylist(p.id, song.id)
+    fun removeFromPlaylist(p: Playlist, songs: List<Song>) {
+        UserStore.removeFromPlaylist(p.id, songs.map { it.id })
+        _messages.tryEmit(if (songs.size == 1) "Retiré de « ${p.name} »" else "${songs.size} titres retirés de « ${p.name} »")
+    }
+
+    fun setFavorites(songs: List<Song>, favorite: Boolean) {
+        UserStore.setFavorites(songs.map { it.id }, favorite)
+        _messages.tryEmit(
+            when {
+                favorite && songs.size == 1 -> "Ajouté aux favoris"
+                favorite -> "${songs.size} titres ajoutés aux favoris"
+                songs.size == 1 -> "Retiré des favoris"
+                else -> "${songs.size} titres retirés des favoris"
+            }
+        )
+    }
     fun movePlaylistSong(p: Playlist, from: Int, to: Int) = UserStore.movePlaylistSong(p.id, from, to)
     fun renamePlaylist(p: Playlist, name: String) = UserStore.renamePlaylist(p.id, name)
     fun deletePlaylist(p: Playlist) = UserStore.deletePlaylist(p.id)

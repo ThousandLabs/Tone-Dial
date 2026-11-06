@@ -44,6 +44,7 @@ fun MiniPlayer(song: Song, ui: PlayerUi, vm: MainViewModel, onOpen: () -> Unit) 
             .fillMaxWidth()
             .background(TdColors.Surface)
             .clickable(onClick = onOpen)
+            .swipeTracks(onNext = { vm.next() }, onPrevious = { vm.previous() })
     ) {
         LinearProgressIndicator(
             progress = { progress },
@@ -108,7 +109,8 @@ fun PlayerScreen(vm: MainViewModel, nav: Nav, song: Song, ui: PlayerUi, onClose:
                         song.art(),
                         Modifier
                             .fillMaxWidth()
-                            .aspectRatio(1f, matchHeightConstraintsFirst = true),
+                            .aspectRatio(1f, matchHeightConstraintsFirst = true)
+                            .swipeTracks(onNext = { vm.next() }, onPrevious = { vm.previous() }),
                         corner = 20.dp,
                     )
                 }

@@ -182,7 +182,24 @@ private val guide = listOf(
     GuideSection(
         Icons.Outlined.MoreVert, "Menu d'un morceau",
         listOf(
-            "Appuyez sur les trois points d'un titre (ou restez appuyé dessus) pour : le lire juste après, l'ajouter à la file d'attente ou à une playlist, le mettre en favori, voir son album ou son artiste, le définir comme sonnerie, le partager ou afficher ses informations.",
+            "Appuyez sur les trois points d'un titre pour : le lire juste après, l'ajouter à la file d'attente ou à une playlist, le mettre en favori, voir son album ou son artiste, le définir comme sonnerie, le partager ou afficher ses informations.",
+        ),
+    ),
+    GuideSection(
+        Icons.Outlined.Checklist, "Sélectionner plusieurs titres",
+        listOf(
+            "Restez appuyé sur un titre pour le sélectionner, puis appuyez simplement sur les autres pour les ajouter ou les retirer de la sélection.",
+            "La barre du haut indique le nombre de titres choisis. L'icône de liste avec un plus les ajoute à une playlist existante ou à une nouvelle playlist.",
+            "Les trois points de cette barre permettent aussi de lire les titres maintenant, juste après, de les ajouter à la file d'attente ou aux favoris. Dans une de vos playlists, vous pouvez en retirer plusieurs d'un coup.",
+            "L'icône « Tout sélectionner » choisit tous les titres affichés. La croix ou le bouton retour annule la sélection.",
+            "Cela fonctionne dans Titres, les albums, artistes, dossiers, playlists et la recherche.",
+        ),
+    ),
+    GuideSection(
+        Icons.Outlined.Swipe, "Gestes et navigation",
+        listOf(
+            "Balayez la barre de lecture du bas, ou la pochette dans le lecteur, vers la gauche pour le titre suivant et vers la droite pour le précédent.",
+            "Le bouton retour vous ramène d'abord à l'onglet Titres. Depuis Titres, appuyez deux fois de suite sur retour pour quitter l'appli. La musique continue si elle était en lecture.",
         ),
     ),
     GuideSection(
@@ -216,6 +233,7 @@ private val guide = listOf(
         listOf(
             "Dans le lecteur, appuyez sur « Minuterie » et choisissez une durée, ou « À la fin du titre en cours ».",
             "Le temps restant s'affiche sous l'icône. Appuyez à nouveau pour l'arrêter.",
+            "À la fin du délai, le son baisse doucement pendant quelques secondes avant la pause.",
         ),
     ),
     GuideSection(

@@ -17,9 +17,33 @@ object SleepTimer {
     val state: StateFlow<State> = _state.asStateFlow()
 
     private val handler = Handler(Looper.getMainLooper())
+    // Fondu de 6 secondes avant la pause, pour ne pas couper la musique d'un coup
+    private const val FADE_STEPS = 30
+    private const val FADE_STEP_MS = 200L
+    private var fadeStep = 0
+
+    private val fadeRunnable = object : Runnable {
+        override fun run() {
+            val p = PlaybackService.instance?.player
+            if (p == null) {
+                _state.value = State(); return
+            }
+            fadeStep++
+            val v = 1f - fadeStep.toFloat() / FADE_STEPS
+            if (v <= 0f || !p.isPlaying) {
+                p.pause()
+                p.volume = 1f
+                _state.value = State()
+            } else {
+                p.volume = v
+                handler.postDelayed(this, FADE_STEP_MS)
+            }
+        }
+    }
+
     private val stopRunnable = Runnable {
-        PlaybackService.instance?.player?.pause()
-        _state.value = State()
+        fadeStep = 0
+        handler.post(fadeRunnable)
     }
 
     fun start(minutes: Int) {
@@ -37,7 +61,11 @@ object SleepTimer {
 
     fun cancel() {
         handler.removeCallbacks(stopRunnable)
-        PlaybackService.instance?.player?.pauseAtEndOfMediaItems = false
+        handler.removeCallbacks(fadeRunnable)
+        PlaybackService.instance?.player?.let {
+            it.pauseAtEndOfMediaItems = false
+            it.volume = 1f
+        }
         _state.value = State()
     }
 

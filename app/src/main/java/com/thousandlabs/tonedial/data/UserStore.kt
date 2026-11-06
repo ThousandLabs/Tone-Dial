@@ -55,6 +55,13 @@ object UserStore {
         prefs.edit().putString("favorites", JSONArray(set.toList()).toString()).apply()
     }
 
+    fun setFavorites(ids: List<Long>, favorite: Boolean) {
+        val set = _favorites.value.toMutableSet()
+        if (favorite) set.addAll(ids) else set.removeAll(ids.toSet())
+        _favorites.value = set
+        prefs.edit().putString("favorites", JSONArray(set.toList()).toString()).apply()
+    }
+
     // ---------- Statistiques d'écoute ----------
     fun recordPlay(id: Long) {
         val counts = _playCounts.value.toMutableMap()
@@ -86,10 +93,12 @@ object UserStore {
             if (p.id == id) p.copy(songIds = (p.songIds + songIds).distinct()) else p
         })
 
-    fun removeFromPlaylist(id: Long, songId: Long) =
+    fun removeFromPlaylist(id: Long, songIds: List<Long>) {
+        val remove = songIds.toSet()
         savePlaylists(_playlists.value.map { p ->
-            if (p.id == id) p.copy(songIds = p.songIds - songId) else p
+            if (p.id == id) p.copy(songIds = p.songIds.filterNot { it in remove }) else p
         })
+    }
 
     fun movePlaylistSong(id: Long, from: Int, to: Int) =
         savePlaylists(_playlists.value.map { p ->
