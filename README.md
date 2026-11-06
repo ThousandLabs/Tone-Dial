@@ -30,7 +30,7 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 
 ## Nouveautés
 
-- **2.0** : dossiers masqués (audios WhatsApp…), correction manuelle titre/artiste/album, pochettes en ligne et depuis la galerie, sauvegarde et restauration, raccourcis d'icône, lecteur à glisser vers le bas, suppression de fichiers, vitesse de lecture, fond du lecteur aux couleurs de la pochette, statistiques d'écoute.
+- **1.10** : dossiers masqués (audios WhatsApp…), correction manuelle titre/artiste/album, pochettes en ligne et depuis la galerie, sauvegarde et restauration, raccourcis d'icône, lecteur à glisser vers le bas, suppression de fichiers, vitesse de lecture, fond du lecteur aux couleurs de la pochette, statistiques d'écoute.
 - **1.9** : file d'attente en une seule liste entièrement réorganisable (y compris au-dessus du morceau en cours), numéros de position, bouton « En cours », vibration au glisser, file mémorisée dans l'ordre choisi (aléatoire compris) au redémarrage.
 - **1.8** : file d'attente en écran complet comme une playlist (en cours, à suivre, titres précédents repliés, enregistrer comme playlist) ; en aléatoire, le morceau choisi est toujours joué en premier.
 - **1.7** : identification automatique des artistes (« Artiste - Titre », mentions parasites retirées, artistes invités), pochettes et logo en grand dans la notification et le centre de contrôle, file d'attente réorganisable même en aléatoire, paroles en ligne (LRCLIB, Google, Coller).
