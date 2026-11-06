@@ -108,6 +108,7 @@ class PlaybackService : MediaSessionService() {
         session = MediaSession.Builder(this, player)
             .setSessionActivity(openApp)
             .setCallback(SessionCallback())
+            .setBitmapLoader(ArtBitmapLoader(this))
             .build()
 
         setMediaNotificationProvider(

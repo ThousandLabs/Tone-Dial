@@ -171,12 +171,22 @@ private val guide = listOf(
         ),
     ),
     GuideSection(
+        Icons.Outlined.Person, "Identification des artistes",
+        listOf(
+            "Beaucoup de musiques téléchargées n'ont pas d'artiste renseigné, et leur nom ressemble à « Oliver Tree - Life Goes On ». Tone Dial sépare alors automatiquement l'artiste et le titre.",
+            "Les mentions inutiles sont retirées des titres : (Official Video), [Lyrics], (Audio), (Clip Officiel), noms de sites de téléchargement, numéros de piste…",
+            "Les artistes invités sont reconnus (feat., ft., virgules, « & ») : un titre « Dadju feat. Tayc » apparaît chez Dadju et chez Tayc dans l'onglet Artistes. Le menu d'un titre propose d'ouvrir chacun de ses artistes.",
+            "Vos fichiers ne sont jamais modifiés. Pour désactiver cette fonction : Menu > Réglages > Identifier les artistes.",
+        ),
+    ),
+    GuideSection(
         Icons.Outlined.PlayArrow, "Lecture",
         listOf(
             "Appuyez sur un titre pour lancer la lecture, ou sur « Lecture aléatoire » pour tout mélanger.",
             "La barre du bas montre le titre en cours. Appuyez dessus pour ouvrir le lecteur complet.",
             "La musique continue écran éteint ou dans une autre appli. Les commandes sont aussi dans la notification et sur l'écran verrouillé.",
             "Débrancher les écouteurs ou couper le Bluetooth met la musique en pause automatiquement.",
+            "La notification, l'écran verrouillé et le centre de contrôle affichent la pochette du titre en grand (celle de l'album ou celle intégrée au fichier), ou le logo Tone Dial si le titre n'en a pas.",
             "Au prochain lancement, Tone Dial reprend là où vous vous étiez arrêté.",
         ),
     ),
@@ -204,6 +214,15 @@ private val guide = listOf(
         ),
     ),
     GuideSection(
+        Icons.Outlined.PlaylistPlay, "File d'attente",
+        listOf(
+            "Dans le lecteur, appuyez sur « File » pour voir les titres à venir, dans l'ordre où ils seront joués.",
+            "Faites glisser la poignée à droite d'un titre pour le monter ou le descendre. Cela fonctionne aussi en lecture aléatoire : l'ordre mélangé est remplacé par le vôtre, l'aléatoire reste activé et la musique ne s'arrête pas.",
+            "Restez appuyé sur un titre de la file pour « Lire ensuite » (juste après le morceau en cours), « Lire maintenant » ou « Retirer de la file ». La croix le retire aussi.",
+            "« Lire ensuite », depuis le menu d'un titre, place bien le titre juste après le morceau en cours, même en aléatoire.",
+        ),
+    ),
+    GuideSection(
         Icons.Outlined.QueueMusic, "Playlists et favoris",
         listOf(
             "Le cœur dans le lecteur ajoute le titre aux Favoris.",
@@ -220,9 +239,11 @@ private val guide = listOf(
         Icons.Outlined.Subject, "Paroles",
         listOf(
             "Dans le lecteur, appuyez sur « Paroles ».",
-            "Tone Dial lit les paroles intégrées aux fichiers MP3 et FLAC, ou un fichier .lrc portant le même nom que la musique, dans le même dossier.",
-            "Vous pouvez aussi coller les paroles vous-même. Si elles sont au format .lrc (avec les minutages [01:23.45]), elles défilent en rythme avec la musique, et un appui sur une ligne y fait sauter la lecture.",
-            "Tout fonctionne hors ligne.",
+            "Tone Dial lit d'abord les paroles intégrées aux fichiers MP3 et FLAC, ou un fichier .lrc portant le même nom que la musique, dans le même dossier.",
+            "S'il n'y en a pas, l'appli les cherche automatiquement sur LRCLIB, une base de paroles libre et gratuite. Les paroles trouvées sont enregistrées sur le téléphone : la fois suivante, plus besoin de connexion.",
+            "Si rien n'est trouvé : « Google » ouvre la recherche dans le navigateur. Copiez les paroles, revenez dans Tone Dial et appuyez sur « Coller ». « Saisir » permet aussi de les taper ou de les modifier.",
+            "Les paroles synchronisées (minutages comme [01:23.45]) défilent en rythme avec la musique, et un appui sur une ligne y fait sauter la lecture.",
+            "Sous les paroles, « Options » permet d'en chercher d'autres, de les modifier ou de les supprimer.",
         ),
     ),
     GuideSection(
@@ -358,7 +379,7 @@ fun AboutScreen(nav: Nav) {
                 ListItemRow(Icons.Outlined.Language, "Site Thousand Labs", subtitle = SITE_URL.removePrefix("https://"), onClick = { open(SITE_URL) })
                 SectionLabel("Confidentialité")
                 Text(
-                    "Vos musiques, playlists, favoris et statistiques d'écoute restent uniquement sur votre téléphone. Tone Dial ne contient aucune publicité. La connexion Internet sert uniquement à vérifier et télécharger les mises à jour depuis GitHub, en arrière-plan, et peut être désactivée ci-dessus.",
+                    "Vos musiques, playlists, favoris et statistiques d'écoute restent uniquement sur votre téléphone. Tone Dial ne contient aucune publicité. La connexion Internet sert uniquement à vérifier les mises à jour sur GitHub (désactivable ci-dessus) et à chercher les paroles sur LRCLIB : seuls le titre et l'artiste du morceau sont envoyés.",
                     modifier = Modifier.padding(horizontal = 20.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = TdColors.TextDim,

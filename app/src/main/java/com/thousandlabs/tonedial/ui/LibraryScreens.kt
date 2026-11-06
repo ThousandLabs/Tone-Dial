@@ -457,7 +457,7 @@ fun AlbumDetailScreen(vm: MainViewModel, nav: Nav, id: Long) {
 @Composable
 fun ArtistDetailScreen(vm: MainViewModel, nav: Nav, name: String) {
     val artists by vm.artists.collectAsStateWithLifecycle()
-    val artist = artists.firstOrNull { it.name == name }
+    val artist = artists.firstOrNull { it.name == name } ?: artists.firstOrNull { it.name.equals(name, ignoreCase = true) }
     if (artist == null) {
         MissingScreen(nav)
         return
@@ -770,6 +770,27 @@ fun SettingsScreen(vm: MainViewModel, nav: Nav) {
                 }
                 ListItemRow(Icons.Outlined.Refresh, "Actualiser la bibliothèque", subtitle = "Rechercher les nouvelles musiques",
                     onClick = { vm.loadLibrary(); vm.notify("Bibliothèque actualisée") })
+                var smart by remember { mutableStateOf(vm.smartTags()) }
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Outlined.Person, null, tint = TdColors.Text, modifier = Modifier.size(22.dp))
+                    Spacer(Modifier.width(18.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Identifier les artistes", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "Sépare « Artiste - Titre » dans les noms de fichiers, retire les mentions comme (Official Video) et repère les artistes invités (feat.). Vos fichiers ne sont pas modifiés.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TdColors.TextDim,
+                        )
+                    }
+                    Switch(
+                        checked = smart,
+                        onCheckedChange = { smart = it; vm.setSmartTags(it) },
+                        colors = SwitchDefaults.colors(checkedTrackColor = TdColors.Accent, checkedThumbColor = TdColors.Background),
+                    )
+                }
                 SectionLabel("Son")
                 ListItemRow(Icons.Outlined.Equalizer, "Égaliseur et basses", onClick = { nav.go(Screen.Equalizer) })
                 SectionLabel("Aide")

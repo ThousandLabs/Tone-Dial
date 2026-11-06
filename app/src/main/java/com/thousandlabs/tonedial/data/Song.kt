@@ -19,6 +19,8 @@ data class Song(
     val folderPath: String,
     val dateAdded: Long,
     val size: Long,
+    /** Artiste principal puis artistes invités (feat., ft., &…). */
+    val artists: List<String> = listOf(artist),
 ) {
     val uri: Uri get() = songUri(id)
     val artUri: Uri get() = albumArtUri(albumId)

@@ -316,9 +316,11 @@ fun SongMenuSheet(
                         }
                         onDismiss()
                     })
-                    ListItemRow(Icons.Outlined.Person, "Voir l'artiste", subtitle = song.artist, onClick = {
-                        closePlayer(); nav.go(Screen.ArtistDetail(song.artist)); onDismiss()
-                    })
+                    song.artists.take(4).forEach { name ->
+                        ListItemRow(Icons.Outlined.Person, if (song.artists.size > 1) "Voir $name" else "Voir l'artiste", subtitle = name, onClick = {
+                            closePlayer(); nav.go(Screen.ArtistDetail(name)); onDismiss()
+                        })
+                    }
                     ListItemRow(Icons.Outlined.Subject, "Ajouter ou modifier les paroles", onClick = { dialog = "lyrics" })
                     ListItemRow(Icons.Outlined.RingVolume, "Définir comme sonnerie", onClick = {
                         if (vm.setRingtone(song)) onDismiss() else dialog = "ringtone"

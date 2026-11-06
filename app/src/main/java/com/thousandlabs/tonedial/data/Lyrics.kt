@@ -27,7 +27,10 @@ object LyricsLoader {
     private val metaTag = Regex("""^\[(ar|ti|al|by|offset|length|re|ve|au|#):.*]$""", RegexOption.IGNORE_CASE)
 
     suspend fun load(context: Context, song: Song): Lyrics? = withContext(Dispatchers.IO) {
-        UserStore.customLyrics(song.id)?.let { return@withContext parse(it, "Saisies dans l'appli") }
+        UserStore.customLyrics(song.id)?.let {
+            val src = if (UserStore.customLyricsSource(song.id) == "lrclib") "Téléchargées depuis LRCLIB" else "Saisies dans l'appli"
+            return@withContext parse(it, src)
+        }
 
         runCatching {
             val base = song.path.substringBeforeLast('.', song.path)

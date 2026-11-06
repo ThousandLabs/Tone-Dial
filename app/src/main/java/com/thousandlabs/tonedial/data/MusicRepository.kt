@@ -8,7 +8,7 @@ import java.io.File
 
 object MusicRepository {
 
-    suspend fun loadSongs(context: Context, minDurationMs: Long): List<Song> = withContext(Dispatchers.IO) {
+    suspend fun loadSongs(context: Context, minDurationMs: Long, smartTags: Boolean = true): List<Song> = withContext(Dispatchers.IO) {
         val songs = ArrayList<Song>()
         val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         @Suppress("DEPRECATION")
@@ -57,10 +57,19 @@ object MusicRepository {
                         displayName.isNotBlank() -> displayName.substringBeforeLast('.')
                         else -> "Sans titre"
                     }
+                    val rawArtist = c.getString(artistCol)
+                    var finalTitle = title
+                    var finalArtist = cleanTag(rawArtist, "Artiste inconnu")
+                    if (smartTags) {
+                        val r = TagCleaner.clean(title, rawArtist)
+                        finalTitle = r.title
+                        finalArtist = r.artist ?: "Artiste inconnu"
+                    }
                     songs += Song(
                         id = c.getLong(idCol),
-                        title = title,
-                        artist = cleanTag(c.getString(artistCol), "Artiste inconnu"),
+                        title = finalTitle,
+                        artist = finalArtist,
+                        artists = if (finalArtist == "Artiste inconnu") listOf(finalArtist) else TagCleaner.artists(finalArtist, finalTitle),
                         album = cleanTag(c.getString(albumCol), "Album inconnu"),
                         albumId = c.getLong(albumIdCol),
                         artistId = c.getLong(artistIdCol),
@@ -82,7 +91,7 @@ object MusicRepository {
     }
 
     private fun cleanTag(value: String?, fallback: String): String =
-        if (value.isNullOrBlank() || value == "<unknown>") fallback else value
+        if (TagCleaner.isUnknown(value)) fallback else value!!
 
     fun albums(songs: List<Song>): List<Album> =
         songs.groupBy { it.albumId }.map { (id, list) ->
@@ -95,10 +104,20 @@ object MusicRepository {
             )
         }.sortedBy { it.name.lowercase() }
 
-    fun artists(songs: List<Song>): List<Artist> =
-        songs.groupBy { it.artist }.map { (name, list) ->
+    /** Un titre avec invités apparaît chez chacun de ses artistes. */
+    fun artists(songs: List<Song>): List<Artist> {
+        val byKey = LinkedHashMap<String, Pair<String, MutableList<Song>>>()
+        songs.forEach { song ->
+            song.artists.forEach { name ->
+                val key = name.lowercase()
+                val entry = byKey.getOrPut(key) { name to mutableListOf() }
+                entry.second += song
+            }
+        }
+        return byKey.values.map { (name, list) ->
             Artist(name, list.sortedWith(compareBy<Song> { it.album.lowercase() }.thenBy { it.track }))
-        }.sortedBy { it.name.lowercase() }
+        }.sortedWith(compareBy<Artist> { it.name == "Artiste inconnu" }.thenBy { it.name.lowercase() })
+    }
 
     fun folders(songs: List<Song>): List<Folder> =
         songs.groupBy { it.folderPath }.map { (path, list) ->

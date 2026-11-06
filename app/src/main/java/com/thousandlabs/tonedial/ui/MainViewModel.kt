@@ -123,7 +123,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun loadLibrary() {
         viewModelScope.launch {
             _loading.value = true
-            _songs.value = MusicRepository.loadSongs(ctx, UserStore.minDurationSec.value * 1000L)
+            _songs.value = MusicRepository.loadSongs(ctx, UserStore.minDurationSec.value * 1000L, smartTags())
             _loading.value = false
             tryRestore()
             refreshPlayer()
@@ -131,6 +131,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setSort(s: SongSort) = UserStore.setSort(s)
+
+    fun smartTags(): Boolean = UserStore.getBool("smart_tags", true)
+
+    fun setSmartTags(on: Boolean) {
+        UserStore.putBool("smart_tags", on)
+        loadLibrary()
+    }
 
     fun setMinDuration(sec: Int) {
         UserStore.setMinDurationSec(sec)
@@ -263,7 +270,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     .setTitle(title)
                     .setArtist(artist)
                     .setAlbumTitle(album)
-                    .setArtworkUri(artUri)
+                    .setArtworkUri(com.thousandlabs.tonedial.playback.ArtBitmapLoader.artUri(id, albumId))
                     .setIsPlayable(true)
                     .setIsBrowsable(false)
                     .build()
@@ -281,13 +288,76 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         c.play()
     }
 
+    /** Lecteur du service (même processus) : nécessaire pour personnaliser l'ordre aléatoire. */
+    private val exo: androidx.media3.exoplayer.ExoPlayer? get() = PlaybackService.instance?.player
+
+    /** Indices des titres dans l'ordre de lecture réel (ordre mélangé si l'aléatoire est actif). */
+    private fun playOrder(p: Player): List<Int> {
+        val tl = p.currentTimeline
+        if (tl.isEmpty) return emptyList()
+        val shuffle = p.shuffleModeEnabled
+        val out = ArrayList<Int>(tl.windowCount)
+        var i = tl.getFirstWindowIndex(shuffle)
+        while (i != C.INDEX_UNSET && out.size < tl.windowCount) {
+            out += i
+            i = tl.getNextWindowIndex(i, Player.REPEAT_MODE_OFF, shuffle)
+        }
+        return out
+    }
+
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private fun applyShuffleOrder(p: androidx.media3.exoplayer.ExoPlayer, order: List<Int>) {
+        if (order.size != p.mediaItemCount) return
+        p.setShuffleOrder(androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder(order.toIntArray(), System.nanoTime()))
+    }
+
+    /**
+     * Déplace un titre dans la file d'attente (positions dans l'ordre affiché).
+     * En aléatoire, l'ordre mélangé est remplacé par celui choisi, sans couper la lecture.
+     */
+    fun moveInQueue(fromPos: Int, toPos: Int) {
+        val p = exo ?: return
+        val order = playOrder(p)
+        if (fromPos !in order.indices || toPos !in order.indices || fromPos == toPos) return
+        if (!p.shuffleModeEnabled) {
+            p.moveMediaItem(order[fromPos], order[toPos])
+        } else {
+            val m = order.toMutableList()
+            val w = m.removeAt(fromPos)
+            m.add(toPos, w)
+            applyShuffleOrder(p, m)
+        }
+    }
+
+    /** Place un titre de la file juste après le morceau en cours. */
+    fun queuePlayNext(pos: Int) {
+        val p = exo ?: return
+        val order = playOrder(p)
+        val cur = order.indexOf(p.currentMediaItemIndex)
+        if (cur < 0 || pos == cur) return
+        moveInQueue(pos, if (pos < cur) cur else cur + 1)
+        _messages.tryEmit("Sera lu juste après")
+    }
+
     fun playNext(songs: List<Song>) {
         val c = controller ?: return
         if (songs.isEmpty()) return
         if (c.mediaItemCount == 0) {
             play(songs); return
         }
-        c.addMediaItems(c.currentMediaItemIndex + 1, songs.map { it.toMediaItem() })
+        val p = exo
+        if (p != null && p.shuffleModeEnabled) {
+            // en aléatoire, on insère puis on place les nouveaux titres juste après le morceau en cours
+            val insertAt = p.currentMediaItemIndex + 1
+            p.addMediaItems(insertAt, songs.map { it.toMediaItem() })
+            val fresh = (insertAt until insertAt + songs.size).toSet()
+            val order = playOrder(p).filterNot { it in fresh }.toMutableList()
+            val cur = order.indexOf(p.currentMediaItemIndex)
+            order.addAll(cur + 1, (insertAt until insertAt + songs.size).toList())
+            applyShuffleOrder(p, order)
+        } else {
+            c.addMediaItems(c.currentMediaItemIndex + 1, songs.map { it.toMediaItem() })
+        }
         _messages.tryEmit(if (songs.size == 1) "Sera lu juste après" else "${songs.size} titres lus juste après")
     }
 
@@ -389,6 +459,48 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (lyricsFor == song.id) _lyrics.value = l
             _lyricsLoading.value = false
         }
+    }
+
+    private val _lyricsSearching = MutableStateFlow(false)
+    val lyricsSearching: StateFlow<Boolean> = _lyricsSearching.asStateFlow()
+    private val _lyricsNotFoundOnline = MutableStateFlow<Set<Long>>(emptySet())
+    val lyricsNotFoundOnline: StateFlow<Set<Long>> = _lyricsNotFoundOnline.asStateFlow()
+    private val autoSearched = HashSet<Long>()
+
+    /** Cherche les paroles sur LRCLIB. `auto` : recherche lancée toute seule, une fois par titre. */
+    fun searchLyricsOnline(song: Song, auto: Boolean = false) {
+        if (auto && !autoSearched.add(song.id)) return
+        if (_lyricsSearching.value) return
+        viewModelScope.launch {
+            _lyricsSearching.value = true
+            val text = com.thousandlabs.tonedial.data.LyricsOnline.find(song)
+            _lyricsSearching.value = false
+            if (text != null) {
+                UserStore.setCustomLyrics(song.id, text, source = "lrclib")
+                _lyricsNotFoundOnline.value = _lyricsNotFoundOnline.value - song.id
+                lyricsFor = null
+                refreshPlayer()
+                if (!auto) _messages.tryEmit("Paroles trouvées et enregistrées")
+            } else {
+                _lyricsNotFoundOnline.value = _lyricsNotFoundOnline.value + song.id
+                if (!auto) _messages.tryEmit("Aucune parole trouvée en ligne (ou pas de connexion)")
+            }
+        }
+    }
+
+    fun googleLyricsIntent(song: Song): Intent =
+        Intent(Intent.ACTION_VIEW, Uri.parse(com.thousandlabs.tonedial.data.LyricsOnline.googleUrl(song)))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    /** Colle les paroles copiées depuis le navigateur. */
+    fun pasteLyrics(song: Song) {
+        val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        val text = cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(ctx)?.toString()?.trim()
+        if (text.isNullOrBlank()) {
+            _messages.tryEmit("Rien à coller : copiez d'abord les paroles")
+            return
+        }
+        saveLyrics(song, text)
     }
 
     fun saveLyrics(song: Song, text: String) {

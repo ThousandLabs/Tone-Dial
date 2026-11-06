@@ -196,9 +196,13 @@ object UserStore {
     // ---------- Paroles saisies par l'utilisateur ----------
     fun customLyrics(songId: Long): String? = prefs.getString("lyrics_$songId", null)
 
-    fun setCustomLyrics(songId: Long, text: String?) {
-        if (text.isNullOrBlank()) prefs.edit().remove("lyrics_$songId").apply()
-        else prefs.edit().putString("lyrics_$songId", text).apply()
+    fun customLyricsSource(songId: Long): String? = prefs.getString("lyrics_src_$songId", null)
+
+    fun setCustomLyrics(songId: Long, text: String?, source: String? = null) {
+        if (text.isNullOrBlank()) prefs.edit().remove("lyrics_$songId").remove("lyrics_src_$songId").apply()
+        else prefs.edit().putString("lyrics_$songId", text).apply {
+            if (source != null) putString("lyrics_src_$songId", source) else remove("lyrics_src_$songId")
+        }.apply()
     }
 
     // ---------- Réglages ----------

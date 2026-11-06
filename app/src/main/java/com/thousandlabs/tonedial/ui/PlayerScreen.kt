@@ -4,6 +4,7 @@ package com.thousandlabs.tonedial.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -253,9 +254,13 @@ private fun SeekBar(ui: PlayerUi, vm: MainViewModel) {
 
 @Composable
 private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val lyrics by vm.lyrics.collectAsStateWithLifecycle()
     val loading by vm.lyricsLoading.collectAsStateWithLifecycle()
+    val searching by vm.lyricsSearching.collectAsStateWithLifecycle()
+    val notFound by vm.lyricsNotFoundOnline.collectAsStateWithLifecycle()
     var editing by remember { mutableStateOf(false) }
+    var options by remember { mutableStateOf(false) }
 
     if (editing) {
         TextInputDialog(
@@ -270,6 +275,13 @@ private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long) {
     }
 
     val l = lyrics
+    // Recherche automatique en ligne, une seule fois par titre, quand rien n'est trouvé sur le téléphone
+    LaunchedEffect(song.id, loading, l == null) {
+        if (!loading && l == null) vm.searchLyricsOnline(song, auto = true)
+    }
+
+    val openGoogle = { runCatching { context.startActivity(vm.googleLyricsIntent(song)) }; Unit }
+
     Box(
         Modifier
             .fillMaxSize()
@@ -277,23 +289,59 @@ private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long) {
             .background(TdColors.Surface)
     ) {
         when {
-            loading && l == null -> CircularProgressIndicator(color = TdColors.Accent, modifier = Modifier.align(Alignment.Center))
-            l == null || l.lines.isEmpty() -> Column(
+            (loading || searching) && (l == null || l.lines.isEmpty()) -> Column(
                 Modifier.align(Alignment.Center).padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Icon(Icons.Outlined.Subject, null, tint = TdColors.TextDim, modifier = Modifier.size(40.dp))
-                Spacer(Modifier.height(10.dp))
-                Text("Pas de paroles pour ce titre", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(6.dp))
+                CircularProgressIndicator(color = TdColors.Accent)
+                Spacer(Modifier.height(12.dp))
                 Text(
-                    "Ajoutez un fichier .lrc du même nom à côté de la musique, ou collez les paroles vous-même.",
+                    if (searching) "Recherche des paroles en ligne…" else "Chargement…",
+                    style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim,
+                )
+            }
+            l == null || l.lines.isEmpty() -> Column(
+                Modifier.align(Alignment.Center).padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Icon(Icons.Outlined.Subject, null, tint = TdColors.TextDim, modifier = Modifier.size(36.dp))
+                Spacer(Modifier.height(8.dp))
+                Text("Pas de paroles pour ce titre", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    if (song.id in notFound) "Rien trouvé automatiquement. Cherchez sur Google, copiez les paroles, puis revenez les coller ici."
+                    else "Recherchez-les en ligne, ou ajoutez-les vous-même.",
                     style = MaterialTheme.typography.bodySmall,
                     color = TdColors.TextDim,
                     textAlign = TextAlign.Center,
                 )
                 Spacer(Modifier.height(14.dp))
-                OutlinedButton(onClick = { editing = true }) { Text("Ajouter les paroles", color = TdColors.Text) }
+                Button(
+                    onClick = { vm.searchLyricsOnline(song) },
+                    colors = ButtonDefaults.buttonColors(containerColor = TdColors.Accent),
+                ) {
+                    Icon(Icons.Outlined.Search, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (song.id in notFound) "Réessayer la recherche" else "Rechercher automatiquement")
+                }
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = openGoogle) {
+                        Icon(Icons.Outlined.Language, null, modifier = Modifier.size(16.dp), tint = TdColors.Text)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Google", color = TdColors.Text)
+                    }
+                    OutlinedButton(onClick = { vm.pasteLyrics(song) }) {
+                        Icon(Icons.Outlined.ContentPaste, null, modifier = Modifier.size(16.dp), tint = TdColors.Text)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Coller", color = TdColors.Text)
+                    }
+                    OutlinedButton(onClick = { editing = true }) {
+                        Icon(Icons.Outlined.Edit, null, modifier = Modifier.size(16.dp), tint = TdColors.Text)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Saisir", color = TdColors.Text)
+                    }
+                }
             }
             else -> {
                 val state = rememberLazyListState()
@@ -330,12 +378,41 @@ private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long) {
                     }
                     item {
                         Spacer(Modifier.height(16.dp))
-                        Text(
-                            "Source : ${l.source}  ·  Modifier",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TdColors.TextDim,
-                            modifier = Modifier.clickable { editing = true }.padding(vertical = 8.dp),
-                        )
+                        Box {
+                            Text(
+                                "Source : ${l.source}  ·  Options",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TdColors.TextDim,
+                                modifier = Modifier.clickable { options = true }.padding(vertical = 8.dp),
+                            )
+                            DropdownMenu(expanded = options, onDismissRequest = { options = false }, containerColor = TdColors.SurfaceHigh) {
+                                DropdownMenuItem(
+                                    text = { Text("Rechercher d'autres paroles en ligne") },
+                                    leadingIcon = { Icon(Icons.Outlined.Search, null) },
+                                    onClick = { options = false; vm.searchLyricsOnline(song) },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Chercher sur Google") },
+                                    leadingIcon = { Icon(Icons.Outlined.Language, null) },
+                                    onClick = { options = false; openGoogle() },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Coller depuis le presse-papiers") },
+                                    leadingIcon = { Icon(Icons.Outlined.ContentPaste, null) },
+                                    onClick = { options = false; vm.pasteLyrics(song) },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Modifier") },
+                                    leadingIcon = { Icon(Icons.Outlined.Edit, null) },
+                                    onClick = { options = false; editing = true },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Supprimer ces paroles") },
+                                    leadingIcon = { Icon(Icons.Outlined.Delete, null) },
+                                    onClick = { options = false; vm.saveLyrics(song, "") },
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -343,48 +420,88 @@ private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long) {
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun QueueSheet(vm: MainViewModel, ui: PlayerUi, onDismiss: () -> Unit) {
     val songMap by vm.songMap.collectAsStateWithLifecycle()
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val currentPos = ui.queue.indexOfFirst { it.windowIndex == ui.currentWindow }
-    val state = rememberLazyListState(initialFirstVisibleItemIndex = currentPos.coerceAtLeast(0))
+    val state = rememberLazyListState(initialFirstVisibleItemIndex = (currentPos - 1).coerceAtLeast(0))
+    val items = remember { mutableStateListOf<QueueEntry>() }
+    var menuFor by remember { mutableStateOf<Int?>(null) }
+
+    // resynchronise la liste affichée avec la vraie file du lecteur
+    LaunchedEffect(ui.queue) {
+        items.clear()
+        items.addAll(ui.queue)
+    }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = TdColors.Surface) {
         Row(Modifier.padding(horizontal = 20.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("File d'attente", style = MaterialTheme.typography.titleLarge)
                 Text(
-                    "${pluralTitles(ui.queue.size)}${if (ui.shuffle) " · ordre aléatoire" else ""}",
+                    "${pluralTitles(ui.queue.size)}${if (ui.shuffle) " · ordre aléatoire" else ""} · glissez la poignée pour déplacer",
                     style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim,
                 )
             }
             TextButton(onClick = { vm.clearQueue(); onDismiss() }) { Text("Vider") }
         }
-        LazyColumn(state = state, modifier = Modifier.fillMaxHeight(0.75f)) {
-            itemsIndexed(ui.queue, key = { _, e -> e.windowIndex }) { _, entry ->
-                val s = songMap[entry.songId] ?: return@itemsIndexed
-                val isCurrent = entry.windowIndex == ui.currentWindow
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .background(if (isCurrent) TdColors.AccentDim else androidx.compose.ui.graphics.Color.Transparent)
-                        .clickable { vm.jumpTo(entry.windowIndex) }
-                        .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Artwork(s.art(), size = 42.dp)
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(s.title, maxLines = 1, overflow = TextOverflow.Ellipsis, color = if (isCurrent) TdColors.Accent else TdColors.Text)
-                        Text(s.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim)
+        ReorderableList(
+            items = items,
+            key = { it.windowIndex },
+            listState = state,
+            modifier = Modifier.fillMaxHeight(0.78f),
+            onMoved = { from, to -> vm.moveInQueue(from, to) },
+        ) { entry, pos, dragging, handle ->
+            val s = songMap[entry.songId]
+            val isCurrent = entry.windowIndex == ui.currentWindow
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .background(if (isCurrent && !dragging) TdColors.AccentDim else androidx.compose.ui.graphics.Color.Transparent)
+                    .combinedClickable(
+                        onClick = { vm.jumpTo(entry.windowIndex) },
+                        onLongClick = { menuFor = pos },
+                    )
+                    .padding(start = 16.dp, top = 4.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Artwork(s?.art(), size = 42.dp)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(s?.title ?: "Titre introuvable", maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        color = if (isCurrent || dragging) TdColors.Accent else TdColors.Text)
+                    Text(s?.artist ?: "", maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim)
+                }
+                if (isCurrent) {
+                    Icon(Icons.Outlined.GraphicEq, "En cours", tint = TdColors.Accent, modifier = Modifier.padding(horizontal = 4.dp))
+                } else {
+                    IconButton(onClick = { vm.removeFromQueue(entry.windowIndex) }) {
+                        Icon(Icons.Outlined.Close, "Retirer", tint = TdColors.TextDim, modifier = Modifier.size(20.dp))
                     }
-                    if (!isCurrent) {
-                        IconButton(onClick = { vm.removeFromQueue(entry.windowIndex) }) {
-                            Icon(Icons.Outlined.Close, "Retirer", tint = TdColors.TextDim)
+                }
+                DragHandleBox(handle, dragging)
+                Box {
+                    DropdownMenu(expanded = menuFor == pos, onDismissRequest = { menuFor = null }, containerColor = TdColors.SurfaceHigh) {
+                        if (!isCurrent) {
+                            DropdownMenuItem(
+                                text = { Text("Lire ensuite") },
+                                leadingIcon = { Icon(Icons.Outlined.PlaylistPlay, null) },
+                                onClick = { menuFor = null; vm.queuePlayNext(pos) },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Retirer de la file") },
+                                leadingIcon = { Icon(Icons.Outlined.RemoveCircleOutline, null) },
+                                onClick = { menuFor = null; vm.removeFromQueue(entry.windowIndex) },
+                            )
                         }
-                    } else {
-                        Icon(Icons.Outlined.GraphicEq, null, tint = TdColors.Accent, modifier = Modifier.padding(12.dp))
+                        DropdownMenuItem(
+                            text = { Text("Lire maintenant") },
+                            leadingIcon = { Icon(Icons.Outlined.PlayArrow, null) },
+                            onClick = { menuFor = null; vm.jumpTo(entry.windowIndex) },
+                        )
                     }
                 }
             }

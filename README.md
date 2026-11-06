@@ -9,13 +9,15 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 - Détection automatique de toutes les musiques du téléphone (MP3, FLAC, AAC, WAV, OGG…)
 - Onglets Titres, Albums, Artistes, Dossiers et Playlists, plus une recherche
 - Lecture en arrière-plan, notification et commandes sur l'écran verrouillé, écouteurs et Bluetooth
-- Lecture aléatoire, répétition (tout / un titre), file d'attente modifiable
+- Lecture aléatoire, répétition (tout / un titre), file d'attente réorganisable par glisser-déposer, même en aléatoire
+- Identification des artistes depuis les noms de fichiers (« Artiste - Titre », feat., ft.) sans modifier les fichiers
+- Pochette en grand dans la notification, l'écran verrouillé et le centre de contrôle (logo Tone Dial à défaut)
 - Sélection multiple (appui long) pour ajouter plusieurs titres à une playlist, à la file ou aux favoris en une fois
 - Balayage gauche / droite sur la barre de lecture ou la pochette pour changer de titre
 - Favoris et playlists automatiques : les plus écoutés, écoutés récemment, ajoutés récemment
 - Playlists personnelles (créer, renommer, supprimer, ajouter ou retirer des titres), avec un écran d'ajout qui masque les titres déjà présents, un tri propre à chaque playlist et une réorganisation par glisser-déposer
 - Égaliseur avec préréglages, amplificateur de basses et effet d'espace
-- Paroles hors ligne : intégrées au fichier (MP3, FLAC), fichier `.lrc`, ou saisies dans l'appli, avec défilement synchronisé
+- Paroles : intégrées au fichier (MP3, FLAC), fichier `.lrc`, recherche automatique sur LRCLIB, recherche Google et collage, avec défilement synchronisé
 - Minuterie de sommeil (durée ou fin du titre), avec baisse progressive du son
 - Widget d'écran d'accueil
 - Définir un titre comme sonnerie, partager un fichier, informations détaillées
@@ -23,6 +25,7 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 
 ## Nouveautés
 
+- **1.7** : identification automatique des artistes (« Artiste - Titre », mentions parasites retirées, artistes invités), pochettes et logo en grand dans la notification et le centre de contrôle, file d'attente réorganisable même en aléatoire, paroles en ligne (LRCLIB, Google, Coller).
 - **1.6** : mise à jour plus fiable. Si la fenêtre d'installation est fermée, l'appli propose « Relancer l'installation » sans retélécharger.
 - **1.5** : tri des playlists (ordre d'ajout, titre, artiste, album, date de téléchargement, durée, ordre personnalisé), réorganisation par glisser-déposer, tri des Favoris.
 - **1.4** : mises à jour intégrées en deux appuis (bandeau, téléchargement dans l'appli, confirmation Android).
@@ -53,6 +56,6 @@ Chaque modification publiée sur ce dépôt produit automatiquement une nouvelle
 
 - Kotlin, Jetpack Compose (Material 3), Media3 / ExoPlayer
 - Compilation et signature automatiques par GitHub Actions (`.github/workflows/build.yml`)
-- Aucune publicité. Internet sert uniquement aux mises à jour (GitHub) ; toutes les données restent sur le téléphone
+- Aucune publicité. Internet sert uniquement aux mises à jour (GitHub) et à la recherche de paroles (LRCLIB) ; toutes les données restent sur le téléphone
 
 Site : [thousandlabs.github.io](https://thousandlabs.github.io)

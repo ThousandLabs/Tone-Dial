@@ -5,6 +5,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -25,33 +26,40 @@ import com.thousandlabs.tonedial.data.art
 import kotlinx.coroutines.launch
 
 /**
- * Liste réorganisable : on attrape la poignée à droite d'un titre et on le fait glisser.
- * `items` est modifiée directement ; l'appelant enregistre l'ordre à la fin.
+ * Liste réorganisable générique : on attrape la poignée d'un élément et on le fait glisser.
+ * `items` est modifiée pendant le glissement ; `onMoved(de, vers)` est appelé quand on lâche.
  */
 @Composable
-fun ReorderList(items: MutableList<Song>, modifier: Modifier = Modifier) {
-    val listState = rememberLazyListState()
+fun <T> ReorderableList(
+    items: MutableList<T>,
+    key: (T) -> Any,
+    modifier: Modifier = Modifier,
+    listState: LazyListState = rememberLazyListState(),
+    onMoved: (from: Int, to: Int) -> Unit = { _, _ -> },
+    row: @Composable (item: T, index: Int, dragging: Boolean, handle: Modifier) -> Unit,
+) {
     val scope = rememberCoroutineScope()
-    var draggingId by remember { mutableStateOf<Long?>(null) }
+    var draggingKey by remember { mutableStateOf<Any?>(null) }
+    var startIndex by remember { mutableIntStateOf(-1) }
     var offset by remember { mutableFloatStateOf(0f) }
 
+    fun indexOfDragged(): Int = draggingKey?.let { k -> items.indexOfFirst { key(it) == k } } ?: -1
+
     fun onDrag(delta: Float) {
-        val id = draggingId ?: return
         offset += delta
-        val index = items.indexOfFirst { it.id == id }
+        val index = indexOfDragged()
         if (index < 0) return
         val visible = listState.layoutInfo.visibleItemsInfo
         val current = visible.firstOrNull { it.index == index } ?: return
         val center = current.offset + offset + current.size / 2f
         val target = visible.firstOrNull {
-            it.index != index && center > it.offset && center < it.offset + it.size
+            it.index != index && it.index < items.size && center > it.offset && center < it.offset + it.size
         }
         if (target != null) {
             val moved = items.removeAt(index)
             items.add(target.index, moved)
             offset += (current.offset - target.offset).toFloat()
         }
-        // défilement automatique près des bords
         val viewportEnd = listState.layoutInfo.viewportEndOffset
         val top = current.offset + offset
         val bottom = top + current.size
@@ -59,50 +67,73 @@ fun ReorderList(items: MutableList<Song>, modifier: Modifier = Modifier) {
         else if (top < 60) scope.launch { listState.scrollBy(-24f) }
     }
 
+    fun finish() {
+        val end = indexOfDragged()
+        val start = startIndex
+        draggingKey = null
+        offset = 0f
+        startIndex = -1
+        if (start >= 0 && end >= 0 && start != end) onMoved(start, end)
+    }
+
     LazyColumn(state = listState, modifier = modifier) {
-        itemsIndexed(items, key = { _, s -> s.id }) { i, song ->
-            val dragging = song.id == draggingId
-            Row(
+        itemsIndexed(items, key = { _, item -> key(item) }) { i, item ->
+            val k = key(item)
+            val dragging = k == draggingKey
+            val handle = Modifier.pointerInput(k) {
+                detectDragGestures(
+                    onDragStart = {
+                        draggingKey = k
+                        startIndex = items.indexOfFirst { key(it) == k }
+                        offset = 0f
+                    },
+                    onDragEnd = { finish() },
+                    onDragCancel = { finish() },
+                ) { change, amount ->
+                    change.consume()
+                    onDrag(amount.y)
+                }
+            }
+            Box(
                 Modifier
                     .zIndex(if (dragging) 1f else 0f)
                     .graphicsLayer { translationY = if (dragging) offset else 0f }
-                    .fillMaxWidth()
                     .background(if (dragging) TdColors.SurfaceHigh else Color.Transparent)
-                    .padding(start = 16.dp, top = 6.dp, bottom = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    "${i + 1}",
-                    modifier = Modifier.width(30.dp),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TdColors.TextDim,
-                )
-                Artwork(song.art(), size = 42.dp)
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium,
-                        color = if (dragging) TdColors.Accent else TdColors.Text)
-                    Text(song.artist, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim)
-                }
-                Box(
-                    Modifier
-                        .size(56.dp)
-                        .pointerInput(song.id) {
-                            detectDragGestures(
-                                onDragStart = { draggingId = song.id; offset = 0f },
-                                onDragEnd = { draggingId = null; offset = 0f },
-                                onDragCancel = { draggingId = null; offset = 0f },
-                            ) { change, amount ->
-                                change.consume()
-                                onDrag(amount.y)
-                            }
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(Icons.Outlined.DragHandle, "Déplacer", tint = if (dragging) TdColors.Accent else TdColors.TextDim)
-                }
+                row(item, i, dragging, handle)
             }
+        }
+    }
+}
+
+/** Poignée de déplacement à placer à droite d'une ligne. */
+@Composable
+fun DragHandleBox(handle: Modifier, dragging: Boolean) {
+    Box(handle.size(52.dp), contentAlignment = Alignment.Center) {
+        Icon(Icons.Outlined.DragHandle, "Déplacer", tint = if (dragging) TdColors.Accent else TdColors.TextDim)
+    }
+}
+
+/** Réorganisation d'une liste de titres (playlists). */
+@Composable
+fun ReorderList(items: MutableList<Song>, modifier: Modifier = Modifier) {
+    ReorderableList(items, key = { it.id }, modifier = modifier) { song, i, dragging, handle ->
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("${i + 1}", modifier = Modifier.width(30.dp), style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim)
+            Artwork(song.art(), size = 42.dp)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium,
+                    color = if (dragging) TdColors.Accent else TdColors.Text)
+                Text(song.artist, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim)
+            }
+            DragHandleBox(handle, dragging)
         }
     }
 }
