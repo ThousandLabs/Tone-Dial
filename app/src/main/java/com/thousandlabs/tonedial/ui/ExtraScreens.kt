@@ -195,8 +195,10 @@ private val guide = listOf(
     GuideSection(
         Icons.Outlined.Image, "Pochettes",
         listOf(
-            "Quand un titre sans image est joué, Tone Dial cherche sa pochette officielle en ligne (catalogue public iTunes) et la garde sur le téléphone. Réglage : Menu > Réglages > Pochettes automatiques.",
-            "Pour tout compléter d'un coup : Menu > Réglages > « Rechercher toutes les pochettes manquantes ». Comptez environ 3 secondes par album ; vous pouvez utiliser l'appli pendant ce temps.",
+            "Quand un titre sans image est joué, Tone Dial cherche sa pochette officielle en ligne (Deezer, puis iTunes) et la garde sur le téléphone. Réglage : Menu > Réglages > Pochettes automatiques.",
+            "La recherche ignore les parties parasites des noms de fichiers (codes de vidéo, suites de lettres et de chiffres, (1), 320kbps, lyrics…) et vérifie la durée du morceau pour éviter les mauvaises pochettes.",
+            "Les openings et endings d'anime (« One Piece Opening 25 - The Peak ») sont reconnus : l'appli retrouve la chanson officielle, ou à défaut utilise l'affiche de l'anime.",
+            "Pour tout compléter d'un coup : Menu > Réglages > « Rechercher toutes les pochettes manquantes ». À la fin, « Titres sans pochette » liste ceux qui restent : choisissez une image dans la galerie ou relancez la recherche pour un titre.",
             "Pour choisir vous-même : menu du titre > Pochette > « Choisir une image » dans la galerie, ou « Chercher la pochette en ligne ».",
             "Le fond du lecteur prend les couleurs de la pochette du titre en cours.",
         ),
@@ -418,7 +420,7 @@ fun AboutScreen(nav: Nav) {
                 ListItemRow(Icons.Outlined.Language, "Site Thousand Labs", subtitle = SITE_URL.removePrefix("https://"), onClick = { open(SITE_URL) })
                 SectionLabel("Confidentialité")
                 Text(
-                    "Vos musiques, playlists, favoris et statistiques d'écoute restent uniquement sur votre téléphone. Tone Dial ne contient aucune publicité. La connexion Internet sert uniquement à vérifier les mises à jour sur GitHub (désactivable ci-dessus) à chercher les paroles (LRCLIB) et les pochettes (catalogue iTunes) : seuls le titre et l'artiste du morceau sont envoyés.",
+                    "Vos musiques, playlists, favoris et statistiques d'écoute restent uniquement sur votre téléphone. Tone Dial ne contient aucune publicité. La connexion Internet sert uniquement à vérifier les mises à jour sur GitHub (désactivable ci-dessus) à chercher les paroles (LRCLIB) et les pochettes (Deezer, iTunes, AnimeThemes) : seuls le titre et l'artiste du morceau sont envoyés.",
                     modifier = Modifier.padding(horizontal = 20.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = TdColors.TextDim,

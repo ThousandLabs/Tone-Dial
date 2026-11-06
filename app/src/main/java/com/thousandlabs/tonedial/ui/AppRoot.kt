@@ -36,6 +36,7 @@ sealed interface Screen {
     data class Queue(val fromPlayer: Boolean) : Screen
     data object FolderFilter : Screen
     data object Stats : Screen
+    data object MissingCovers : Screen
     data class AutoDetail(val kind: AutoList) : Screen
     data object Search : Screen
     data object Equalizer : Screen
@@ -207,6 +208,7 @@ fun AppRoot(vm: MainViewModel) {
                         is Screen.Queue -> QueueScreen(vm, nav)
                         Screen.FolderFilter -> FolderFilterScreen(vm, nav)
                         Screen.Stats -> StatsScreen(vm, nav)
+                        Screen.MissingCovers -> MissingCoversScreen(vm, nav)
                         is Screen.AutoDetail -> AutoDetailScreen(vm, nav, s.kind)
                         Screen.Search -> SearchScreen(vm, nav)
                         Screen.Equalizer -> EqualizerScreen(nav)

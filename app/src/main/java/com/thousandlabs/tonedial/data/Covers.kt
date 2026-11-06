@@ -39,6 +39,12 @@ object Covers {
         if (::dir.isInitialized) return
         dir = File(context.filesDir, "covers").apply { mkdirs() }
         dir.listFiles()?.forEach { stamps[it.name] = it.lastModified() }
+        // liste des titres sans pochette de la dernière recherche
+        runCatching {
+            val a = org.json.JSONArray(UserStore.getString("covers_missing") ?: "[]")
+            val ids = (0 until a.length()).map { a.getLong(it) }
+            if (ids.isNotEmpty()) _progress.value = Progress(finished = true, missing = ids)
+        }
     }
 
     private fun songName(id: Long) = "song_$id.jpg"
@@ -90,84 +96,72 @@ object Covers {
         localBytes(song.id, song.albumId) != null || ArtBytes.load(context, song.id, song.albumId, includeLocal = false) != null
 
     // ------------------------------------------------------------------
+    // Vrais albums et faux albums
+    // ------------------------------------------------------------------
+
+    private val fakeAlbumWords = listOf(
+        "download", "youtube", "www", ".com", ".net", ".cc", "telegram", "whatsapp", "music", "musique",
+        "unknown", "inconnu", "mp3", "audio", "songs", "single", "tubidy", "y2mate", "savefrom", "snaptube",
+    )
+
+    /**
+     * Un groupe de titres est un vrai album s'il a un nom plausible et peu d'artistes différents.
+     * Les téléchargeurs mettent souvent le même faux album (nom du site, du dossier…) sur tous leurs fichiers.
+     */
+    fun isRealAlbum(albumSongs: List<Song>): Boolean {
+        val first = albumSongs.firstOrNull() ?: return false
+        val name = first.album.lowercase().trim()
+        if (name.isBlank() || first.album == "Album inconnu") return false
+        if (fakeAlbumWords.any { name.contains(it) }) return false
+        if (albumSongs.any { it.folder.equals(first.album, ignoreCase = true) }) return false
+        if (albumSongs.size > 40) return false
+        val artists = albumSongs.mapNotNull { it.artists.firstOrNull()?.lowercase() }.filter { it != "artiste inconnu" }.distinct()
+        return artists.size <= 2
+    }
+
+    /** Retire les pochettes d'album enregistrées pour de faux albums (ancienne version de la recherche). */
+    fun cleanupFakeAlbums(library: List<Song>) {
+        if (!::dir.isInitialized) return
+        val byAlbum = library.groupBy { it.albumId }
+        var removed = 0
+        stamps.keys.filter { it.startsWith("album_") }.forEach { name ->
+            val id = name.removePrefix("album_").removeSuffix(".jpg").toLongOrNull() ?: return@forEach
+            val songs = byAlbum[id] ?: return@forEach
+            if (!isRealAlbum(songs)) {
+                File(dir, name).delete()
+                stamps.remove(name)
+                removed++
+            }
+        }
+        if (removed > 0) _version.value++
+    }
+
+    // ------------------------------------------------------------------
     // Recherche en ligne
     // ------------------------------------------------------------------
 
-    private fun norm(s: String): String =
-        Normalizer.normalize(s.lowercase(), Normalizer.Form.NFD)
-            .replace(Regex("""\p{Mn}+"""), "")
-            .replace(Regex("""[(\[].*?[)\]]"""), "")
-            .replace(Regex("""[^a-z0-9 ]"""), " ")
-            .replace(Regex("""\s+"""), " ").trim()
-
     /** Cherche et enregistre la pochette d'un titre. Renvoie true si une image a été trouvée. */
-    suspend fun fetchOnline(song: Song): Boolean = withContext(Dispatchers.IO) {
+    suspend fun fetchOnline(song: Song, realAlbum: Boolean = false): Boolean = withContext(Dispatchers.IO) {
         if (!::dir.isInitialized) return@withContext false
-        val artist = song.artists.firstOrNull()?.takeUnless { it == "Artiste inconnu" }
-        val title = norm(song.title)
-        if (title.isBlank()) return@withContext false
-        val term = listOfNotNull(artist, song.title.substringBefore(" (").substringBefore(" [")).joinToString(" ")
-        val url = "https://itunes.apple.com/search?media=music&entity=song&limit=8&term=" + URLEncoder.encode(term, "UTF-8")
-        val json = httpText(url) ?: return@withContext false
-        val results = runCatching { JSONObject(json).getJSONArray("results") }.getOrNull() ?: return@withContext false
-        var best: String? = null
-        var bestScore = 0
-        for (i in 0 until results.length()) {
-            val r = results.getJSONObject(i)
-            val art = r.optString("artworkUrl100")
-            if (art.isBlank()) continue
-            val t = norm(r.optString("trackName"))
-            val a = norm(r.optString("artistName"))
-            var score = 0
-            if (t == title) score += 4 else if (t.contains(title) || title.contains(t)) score += 2
-            if (artist != null) {
-                val na = norm(artist)
-                if (a == na) score += 4 else if (a.contains(na) || na.contains(a)) score += 2
-            }
-            // il faut au moins un titre identique, ou un titre proche avec le bon artiste
-            if (score >= 4 && score > bestScore) {
-                bestScore = score
-                best = art
-            }
-        }
-        val artUrl = best?.replace("100x100bb", "600x600bb") ?: return@withContext false
-        val bytes = httpBytes(artUrl) ?: return@withContext false
+        val found = runCatching { CoverSearch.find(song) }.getOrNull() ?: return@withContext false
+        val bytes = CoverSearch.download(found.imageUrl) ?: return@withContext false
         val bmp = ArtBytes.decode(bytes, 600) ?: return@withContext false
-        val name = if (song.album != "Album inconnu") albumName(song.albumId) else songName(song.id)
-        save(name, bmp)
+        save(if (realAlbum) albumName(song.albumId) else songName(song.id), bmp)
         true
     }
-
-    private fun open(url: String): HttpURLConnection =
-        (URL(url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 8000
-            readTimeout = 12000
-            setRequestProperty("User-Agent", "ToneDial (https://github.com/ThousandLabs/Tone-Dial)")
-        }
-
-    private fun httpText(url: String): String? = runCatching {
-        val c = open(url)
-        try {
-            if (c.responseCode != 200) null else c.inputStream.bufferedReader().readText()
-        } finally {
-            c.disconnect()
-        }
-    }.getOrNull()
-
-    private fun httpBytes(url: String): ByteArray? = runCatching {
-        val c = open(url)
-        try {
-            if (c.responseCode != 200) null else c.inputStream.use { it.readBytes() }
-        } finally {
-            c.disconnect()
-        }
-    }.getOrNull()
 
     // ------------------------------------------------------------------
     // Recherche groupée pour toute la bibliothèque
     // ------------------------------------------------------------------
 
-    data class Progress(val running: Boolean = false, val done: Int = 0, val total: Int = 0, val found: Int = 0, val finished: Boolean = false)
+    data class Progress(
+        val running: Boolean = false,
+        val done: Int = 0,
+        val total: Int = 0,
+        val found: Int = 0,
+        val finished: Boolean = false,
+        val missing: List<Long> = emptyList(),
+    )
 
     private val _progress = MutableStateFlow(Progress())
     val progress: StateFlow<Progress> = _progress.asStateFlow()
@@ -180,10 +174,13 @@ object Covers {
     fun setAutoEnabled(on: Boolean) = UserStore.putBool("covers_auto", on)
 
     /** Pendant la lecture : cherche la pochette du titre en cours s'il n'en a pas. */
-    fun autoFetch(context: Context, song: Song) {
+    fun autoFetch(context: Context, song: Song, library: List<Song> = emptyList()) {
         if (!autoEnabled() || !autoTried.add(song.id)) return
         scope.launch {
-            if (!hasAnyArt(context, song)) fetchOnline(song)
+            if (!hasAnyArt(context, song)) {
+                val albumSongs = library.filter { it.albumId == song.albumId }
+                fetchOnline(song, realAlbum = albumSongs.isNotEmpty() && isRealAlbum(albumSongs))
+            }
         }
     }
 
@@ -191,24 +188,45 @@ object Covers {
         if (job?.isActive == true) return
         val app = context.applicationContext
         job = scope.launch {
-            // un représentant par album connu, chaque titre sinon
-            val groups = songs.groupBy { if (it.album != "Album inconnu") "a${it.albumId}" else "s${it.id}" }.values.map { it.first() }
-            _progress.value = Progress(running = true, total = groups.size)
-            var found = 0
-            groups.forEachIndexed { i, song ->
-                if (!isActive) return@launch
-                if (!hasAnyArt(app, song)) {
-                    if (fetchOnline(song)) found++
-                    delay(3100) // le catalogue limite à environ 20 recherches par minute
-                }
-                _progress.value = Progress(running = true, done = i + 1, total = groups.size, found = found)
+            cleanupFakeAlbums(songs)
+            // un représentant par vrai album, chaque titre sinon
+            val byAlbum = songs.groupBy { it.albumId }
+            val tasks = ArrayList<Pair<Song, Boolean>>()
+            byAlbum.values.forEach { list ->
+                if (isRealAlbum(list)) tasks += list.first() to true
+                else list.forEach { tasks += it to false }
             }
-            _progress.value = Progress(running = false, done = groups.size, total = groups.size, found = found, finished = true)
+            _progress.value = Progress(running = true, total = tasks.size)
+            var found = 0
+            val missing = ArrayList<Long>()
+            tasks.forEachIndexed { i, (song, real) ->
+                if (!isActive) return@launch
+                val members = if (real) byAlbum[song.albumId].orEmpty() else listOf(song)
+                if (members.none { hasAnyArt(app, it) }) {
+                    if (fetchOnline(song, realAlbum = real)) found++ else missing += members.map { it.id }
+                }
+                _progress.value = Progress(running = true, done = i + 1, total = tasks.size, found = found, missing = missing.toList())
+            }
+            _progress.value = Progress(running = false, done = tasks.size, total = tasks.size, found = found, finished = true, missing = missing.toList())
+            saveMissing(missing)
         }
     }
 
     fun stopBatch() {
         job?.cancel()
-        _progress.value = _progress.value.copy(running = false)
+        _progress.value = _progress.value.copy(running = false, finished = true)
+    }
+
+    /** Retire un titre de la liste « sans pochette » (après en avoir ajouté une). */
+    fun markResolved(songId: Long) {
+        val p = _progress.value
+        if (songId in p.missing) {
+            _progress.value = p.copy(missing = p.missing - songId)
+            saveMissing(_progress.value.missing)
+        }
+    }
+
+    private fun saveMissing(ids: List<Long>) {
+        UserStore.putString("covers_missing", org.json.JSONArray(ids).toString())
     }
 }

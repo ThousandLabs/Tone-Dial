@@ -277,3 +277,51 @@ private fun RankRow(rank: Int, song: Song, info: String, onClick: () -> Unit) {
         Text(info, style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim)
     }
 }
+
+// ------------------------------------------------------------------
+// Titres sans pochette
+// ------------------------------------------------------------------
+
+@Composable
+fun MissingCoversScreen(vm: MainViewModel, nav: Nav) {
+    val progress by vm.coverProgress.collectAsStateWithLifecycle()
+    val songMap by vm.songMap.collectAsStateWithLifecycle()
+    val coverVersion by com.thousandlabs.tonedial.data.Covers.version.collectAsStateWithLifecycle()
+    val songs = remember(progress.missing, songMap, coverVersion) {
+        progress.missing.mapNotNull { songMap[it] }
+            .filter { com.thousandlabs.tonedial.data.Covers.stamp(it.id, it.albumId) == 0L }
+            .sortedBy { it.title.lowercase() }
+    }
+    Column(Modifier.fillMaxSize()) {
+        BackTopBar("Titres sans pochette", nav.back)
+        if (songs.isEmpty()) {
+            EmptyState(Icons.Outlined.Image, "Tout est complet", "Tous les titres de la liste ont maintenant une pochette.")
+            return@Column
+        }
+        Text(
+            "Ces titres n'ont été trouvés dans aucun catalogue. Choisissez une image dans la galerie, ou relancez la recherche pour un titre précis (après avoir corrigé son nom si besoin).",
+            style = MaterialTheme.typography.bodySmall,
+            color = TdColors.TextDim,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+        )
+        LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+            items(songs, key = { it.id }) { song ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Artwork(song.art(), size = 46.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
+                        Text(song.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim)
+                    }
+                    IconButton(onClick = { vm.searchCover(song) }) { Icon(Icons.Outlined.ImageSearch, "Chercher en ligne", tint = TdColors.Text) }
+                    IconButton(onClick = { nav.pickCover(song) }) { Icon(Icons.Outlined.AddPhotoAlternate, "Choisir dans la galerie", tint = TdColors.Accent) }
+                }
+            }
+        }
+    }
+}

@@ -134,6 +134,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _allSongs.value = MusicRepository.loadSongs(ctx, UserStore.minDurationSec.value * 1000L, smartTags())
             applyFilters()
             _loading.value = false
+            // une seule fois : retire les pochettes partagées à tort par l'ancienne recherche
+            if (!UserStore.getBool("covers_cleanup_v2", false)) {
+                UserStore.putBool("covers_cleanup_v2", true)
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    com.thousandlabs.tonedial.data.Covers.cleanupFakeAlbums(_songs.value)
+                }
+            }
             tryRestore()
             refreshPlayer()
         }
@@ -200,7 +207,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun searchCover(song: Song) {
         viewModelScope.launch {
+            _messages.tryEmit("Recherche de la pochette…")
             val ok = com.thousandlabs.tonedial.data.Covers.fetchOnline(song)
+            if (ok) com.thousandlabs.tonedial.data.Covers.markResolved(song.id)
             _messages.tryEmit(if (ok) "Pochette trouvée" else "Aucune pochette trouvée (ou pas de connexion)")
         }
     }
@@ -208,6 +217,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setCustomCover(song: Song, image: Uri) {
         viewModelScope.launch {
             val ok = com.thousandlabs.tonedial.data.Covers.setCustom(ctx, song.id, image)
+            if (ok) com.thousandlabs.tonedial.data.Covers.markResolved(song.id)
             _messages.tryEmit(if (ok) "Pochette modifiée" else "Impossible de lire cette image")
         }
     }
@@ -460,7 +470,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             currentWindow = c.currentMediaItemIndex,
         )
         if (currentId != lyricsFor) {
-            currentId?.let { id -> songMap.value[id]?.let { com.thousandlabs.tonedial.data.Covers.autoFetch(ctx, it) } }
+            currentId?.let { id -> songMap.value[id]?.let { com.thousandlabs.tonedial.data.Covers.autoFetch(ctx, it, _songs.value) } }
             lyricsFor = currentId
             _lyrics.value = null
             val song = currentId?.let { songMap.value[it] }

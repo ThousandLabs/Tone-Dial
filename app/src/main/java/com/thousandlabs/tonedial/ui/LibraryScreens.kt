@@ -808,7 +808,7 @@ fun SettingsScreen(vm: MainViewModel, nav: Nav) {
                     onClick = { nav.go(Screen.FolderFilter) },
                 )
                 SectionLabel("Pochettes")
-                CoverSettings(vm)
+                CoverSettings(vm, nav)
                 SectionLabel("Son")
                 ListItemRow(Icons.Outlined.Equalizer, "Égaliseur et basses", onClick = { nav.go(Screen.Equalizer) })
                 SectionLabel("Sauvegarde")
@@ -942,7 +942,7 @@ fun PlaylistPickerScreen(vm: MainViewModel, nav: Nav, id: Long) {
 
 
 @Composable
-private fun CoverSettings(vm: MainViewModel) {
+private fun CoverSettings(vm: MainViewModel, nav: Nav) {
     val progress by vm.coverProgress.collectAsStateWithLifecycle()
     var auto by remember { mutableStateOf(com.thousandlabs.tonedial.data.Covers.autoEnabled()) }
     Row(
@@ -978,7 +978,7 @@ private fun CoverSettings(vm: MainViewModel) {
                 trackColor = TdColors.Divider,
             )
             Text(
-                "Environ 3 secondes par album (limite du catalogue). Vous pouvez utiliser l'appli normalement pendant ce temps.",
+                "Quelques secondes par titre. Vous pouvez utiliser l'appli normalement pendant ce temps.",
                 style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim,
                 modifier = Modifier.padding(top = 6.dp),
             )
@@ -989,6 +989,13 @@ private fun CoverSettings(vm: MainViewModel) {
             Icons.Outlined.ImageSearch, "Rechercher toutes les pochettes manquantes",
             subtitle = if (progress.finished) "Terminé : ${progress.found} pochette(s) ajoutée(s). Appuyez pour relancer." else "Pour tous les titres et albums sans image. Connexion Internet nécessaire.",
             onClick = { vm.startCoverSearch() },
+        )
+    }
+    if (progress.missing.isNotEmpty()) {
+        ListItemRow(
+            Icons.Outlined.HideImage, "Titres sans pochette (${progress.missing.size})",
+            subtitle = "Introuvables en ligne : choisissez une image ou relancez la recherche titre par titre",
+            onClick = { nav.go(Screen.MissingCovers) },
         )
     }
 }
