@@ -414,6 +414,17 @@ fun SongCollectionScreen(
                 } else {
                     Text(emptyText, color = TdColors.TextDim, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
                 }
+                if (playlist != null) {
+                    OutlinedButton(
+                        onClick = { nav.go(Screen.AddToPlaylist(playlist.id)) },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    ) {
+                        Icon(Icons.Outlined.PlaylistAdd, null, modifier = Modifier.size(18.dp), tint = TdColors.Accent)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Ajouter des titres", color = TdColors.Accent)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
             }
             itemsIndexed(songs, key = { i, s -> "${s.id}_$i" }) { i, song ->
                 SelectableSongRow(
@@ -534,7 +545,7 @@ fun PlaylistDetailScreen(vm: MainViewModel, nav: Nav, id: Long) {
         "${pluralTitles(songs.size)} · ${totalDuration(songs)}",
         songs.firstOrNull()?.art(), Icons.Outlined.QueueMusic, songs,
         playlist = playlist,
-        emptyText = "Playlist vide. Ajoutez des morceaux depuis leur menu « Ajouter à une playlist ».",
+        emptyText = "Playlist vide. Appuyez sur « Ajouter des titres » pour la remplir.",
         actions = {
             Box {
                 IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "Options") }
@@ -681,4 +692,110 @@ fun CircleIcon(icon: ImageVector, modifier: Modifier = Modifier) {
             .background(TdColors.SurfaceHigh),
         contentAlignment = Alignment.Center,
     ) { Icon(icon, null, tint = TdColors.Accent, modifier = Modifier.size(20.dp)) }
+}
+
+// ------------------------------------------------------------------
+// Ajout de titres dans une playlist (sans doublons)
+// ------------------------------------------------------------------
+
+@Composable
+fun PlaylistPickerScreen(vm: MainViewModel, nav: Nav, id: Long) {
+    val playlists by vm.playlists.collectAsStateWithLifecycle()
+    val songs by vm.sortedSongs.collectAsStateWithLifecycle()
+    val playlist = playlists.firstOrNull { it.id == id }
+    if (playlist == null) {
+        MissingScreen(nav)
+        return
+    }
+    var query by remember { mutableStateOf("") }
+    var picked by remember { mutableStateOf<Set<Long>>(emptySet()) }
+
+    val inPlaylist = remember(playlist.songIds) { playlist.songIds.toSet() }
+    val q = query.trim().lowercase()
+    val notInPlaylist = remember(songs, inPlaylist) { songs.filter { it.id !in inPlaylist } }
+    val shown = remember(notInPlaylist, q) {
+        if (q.isEmpty()) notInPlaylist else notInPlaylist.filter {
+            it.title.lowercase().contains(q) || it.artist.lowercase().contains(q) || it.album.lowercase().contains(q)
+        }
+    }
+    val allShownPicked = shown.isNotEmpty() && shown.all { it.id in picked }
+
+    Column(Modifier.fillMaxSize()) {
+        BackTopBar("Ajouter à « ${playlist.name} »", nav.back, actions = {
+            IconButton(
+                onClick = {
+                    picked = if (allShownPicked) picked - shown.map { it.id }.toSet() else picked + shown.map { it.id }
+                },
+                enabled = shown.isNotEmpty(),
+            ) {
+                Icon(
+                    Icons.Outlined.SelectAll,
+                    if (allShownPicked) "Tout désélectionner" else "Tout sélectionner",
+                    tint = if (allShownPicked) TdColors.Accent else TdColors.Text,
+                )
+            }
+        })
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            singleLine = true,
+            placeholder = { Text("Rechercher un titre, un artiste, un album") },
+            leadingIcon = { Icon(Icons.Outlined.Search, null) },
+            trailingIcon = {
+                if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Outlined.Close, "Effacer") }
+            },
+            shape = RoundedCornerShape(24.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        )
+        Text(
+            if (notInPlaylist.isEmpty()) "Tous vos titres sont déjà dans cette playlist."
+            else "${pluralTitles(shown.size)} disponibles · les titres déjà présents sont masqués",
+            style = MaterialTheme.typography.bodySmall,
+            color = TdColors.TextDim,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+        )
+        LazyColumn(Modifier.weight(1f)) {
+            items(shown, key = { it.id }) { song ->
+                val isPicked = song.id in picked
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(if (isPicked) TdColors.AccentDim else androidx.compose.ui.graphics.Color.Transparent)
+                        .clickable { picked = if (isPicked) picked - song.id else picked + song.id }
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Artwork(song.art(), size = 44.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium,
+                            color = if (isPicked) TdColors.Accent else TdColors.Text)
+                        Text("${song.artist} · ${song.album}", maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim)
+                    }
+                    Icon(
+                        if (isPicked) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+                        if (isPicked) "Coché" else "Non coché",
+                        tint = if (isPicked) TdColors.Accent else TdColors.TextDim,
+                    )
+                }
+            }
+        }
+        Surface(color = TdColors.Surface, shadowElevation = 8.dp) {
+            Button(
+                onClick = {
+                    val toAdd = songs.filter { it.id in picked }
+                    vm.addToPlaylist(playlist, toAdd)
+                    nav.back()
+                },
+                enabled = picked.isNotEmpty(),
+                colors = ButtonDefaults.buttonColors(containerColor = TdColors.Accent),
+                modifier = Modifier.fillMaxWidth().padding(16.dp).height(48.dp),
+            ) {
+                Icon(Icons.Outlined.PlaylistAdd, null, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(if (picked.isEmpty()) "Cochez des titres à ajouter" else "Ajouter (${picked.size})")
+            }
+        }
+    }
 }

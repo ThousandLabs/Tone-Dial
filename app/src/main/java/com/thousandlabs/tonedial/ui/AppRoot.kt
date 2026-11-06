@@ -32,6 +32,7 @@ sealed interface Screen {
     data class ArtistDetail(val name: String) : Screen
     data class FolderDetail(val path: String) : Screen
     data class PlaylistDetail(val id: Long) : Screen
+    data class AddToPlaylist(val id: Long) : Screen
     data class AutoDetail(val kind: AutoList) : Screen
     data object Search : Screen
     data object Equalizer : Screen
@@ -123,6 +124,7 @@ fun AppRoot(vm: MainViewModel) {
                         is Screen.ArtistDetail -> ArtistDetailScreen(vm, nav, s.name)
                         is Screen.FolderDetail -> FolderDetailScreen(vm, nav, s.path)
                         is Screen.PlaylistDetail -> PlaylistDetailScreen(vm, nav, s.id)
+                        is Screen.AddToPlaylist -> PlaylistPickerScreen(vm, nav, s.id)
                         is Screen.AutoDetail -> AutoDetailScreen(vm, nav, s.kind)
                         Screen.Search -> SearchScreen(vm, nav)
                         Screen.Equalizer -> EqualizerScreen(nav)

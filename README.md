@@ -13,7 +13,7 @@ Lecteur de musique Android hors ligne, sans publicité et sans connexion Interne
 - Sélection multiple (appui long) pour ajouter plusieurs titres à une playlist, à la file ou aux favoris en une fois
 - Balayage gauche / droite sur la barre de lecture ou la pochette pour changer de titre
 - Favoris et playlists automatiques : les plus écoutés, écoutés récemment, ajoutés récemment
-- Playlists personnelles (créer, renommer, supprimer, ajouter ou retirer des titres)
+- Playlists personnelles (créer, renommer, supprimer, ajouter ou retirer des titres), avec un écran d'ajout qui masque les titres déjà présents
 - Égaliseur avec préréglages, amplificateur de basses et effet d'espace
 - Paroles hors ligne : intégrées au fichier (MP3, FLAC), fichier `.lrc`, ou saisies dans l'appli, avec défilement synchronisé
 - Minuterie de sommeil (durée ou fin du titre), avec baisse progressive du son
@@ -23,6 +23,7 @@ Lecteur de musique Android hors ligne, sans publicité et sans connexion Interne
 
 ## Nouveautés
 
+- **1.3** : bouton « Ajouter des titres » dans les playlists, qui masque les titres déjà présents pour éviter les doublons, avec recherche et sélection multiple.
 - **1.2** : sélection multiple par appui long, bouton retour qui revient à l'onglet Titres, double appui pour quitter, balayage pour changer de titre, fondu de fin de minuterie.
 - **1.1** : première version.
 

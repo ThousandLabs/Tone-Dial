@@ -208,6 +208,7 @@ private val guide = listOf(
             "Le cœur dans le lecteur ajoute le titre aux Favoris.",
             "Les playlists automatiques se remplissent toutes seules : Favoris, Les plus écoutés, Écoutés récemment, Ajoutés récemment.",
             "Pour créer votre playlist : onglet Playlists > Créer, ou menu d'un titre > Ajouter à une playlist.",
+            "Dans une playlist, le bouton « Ajouter des titres » affiche toute votre musique sauf les titres déjà présents, ce qui évite les doublons. Cochez les titres voulus (recherche et « Tout sélectionner » disponibles), puis appuyez sur « Ajouter ».",
             "Dans une playlist, les trois points en haut permettent de la renommer ou de la supprimer. Vos fichiers de musique ne sont jamais supprimés.",
         ),
     ),
