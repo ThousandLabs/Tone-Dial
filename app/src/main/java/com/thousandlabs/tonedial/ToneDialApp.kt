@@ -11,6 +11,8 @@ class ToneDialApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         UserStore.init(this)
+        com.thousandlabs.tonedial.data.Covers.init(this)
+        com.thousandlabs.tonedial.data.LibraryPrefs.load()
     }
 
     override fun newImageLoader(): ImageLoader =

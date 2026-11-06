@@ -74,6 +74,11 @@ fun HomeScreen(vm: MainViewModel, nav: Nav) {
                             onClick = { menu = false; vm.loadLibrary(); vm.notify("Bibliothèque actualisée") },
                         )
                         DropdownMenuItem(
+                            text = { Text("Statistiques d'écoute") },
+                            leadingIcon = { Icon(Icons.Outlined.BarChart, null) },
+                            onClick = { menu = false; nav.go(Screen.Stats) },
+                        )
+                        DropdownMenuItem(
                             text = { Text("Réglages") },
                             leadingIcon = { Icon(Icons.Outlined.Settings, null) },
                             onClick = { menu = false; nav.go(Screen.Settings) },
@@ -481,6 +486,11 @@ fun FolderDetailScreen(vm: MainViewModel, nav: Nav, path: String) {
         vm, nav, folder.name,
         "${pluralTitles(folder.songs.size)} · ${folder.path.removePrefix("/storage/emulated/0")}",
         null, Icons.Outlined.Folder, folder.songs,
+        actions = {
+            IconButton(onClick = { vm.excludeFolders(listOf(folder.path)); nav.back() }) {
+                Icon(Icons.Outlined.VisibilityOff, "Masquer ce dossier")
+            }
+        },
     )
 }
 
@@ -791,8 +801,20 @@ fun SettingsScreen(vm: MainViewModel, nav: Nav) {
                         colors = SwitchDefaults.colors(checkedTrackColor = TdColors.Accent, checkedThumbColor = TdColors.Background),
                     )
                 }
+                val excluded by vm.excludedFolders.collectAsStateWithLifecycle()
+                ListItemRow(
+                    Icons.Outlined.FolderOff, "Dossiers affichés",
+                    subtitle = if (excluded.isEmpty()) "Masquer les audios WhatsApp, enregistrements…" else "${excluded.size} dossier(s) masqué(s)",
+                    onClick = { nav.go(Screen.FolderFilter) },
+                )
+                SectionLabel("Pochettes")
+                CoverSettings(vm)
                 SectionLabel("Son")
                 ListItemRow(Icons.Outlined.Equalizer, "Égaliseur et basses", onClick = { nav.go(Screen.Equalizer) })
+                SectionLabel("Sauvegarde")
+                BackupSettings(vm)
+                SectionLabel("Statistiques")
+                ListItemRow(Icons.Outlined.BarChart, "Statistiques d'écoute", subtitle = "Temps d'écoute, titres et artistes préférés", onClick = { nav.go(Screen.Stats) })
                 SectionLabel("Aide")
                 ListItemRow(Icons.Outlined.HelpOutline, "Guide d'utilisation", onClick = { nav.go(Screen.Guide) })
                 ListItemRow(Icons.Outlined.Info, "À propos et mises à jour", onClick = { nav.go(Screen.About) })
@@ -916,4 +938,82 @@ fun PlaylistPickerScreen(vm: MainViewModel, nav: Nav, id: Long) {
             }
         }
     }
+}
+
+
+@Composable
+private fun CoverSettings(vm: MainViewModel) {
+    val progress by vm.coverProgress.collectAsStateWithLifecycle()
+    var auto by remember { mutableStateOf(com.thousandlabs.tonedial.data.Covers.autoEnabled()) }
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Outlined.Image, null, tint = TdColors.Text, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(18.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Pochettes automatiques", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "Quand un titre sans image est joué, l'appli cherche sa pochette officielle en ligne et la garde sur le téléphone.",
+                style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim,
+            )
+        }
+        Switch(
+            checked = auto,
+            onCheckedChange = { auto = it; com.thousandlabs.tonedial.data.Covers.setAutoEnabled(it) },
+            colors = SwitchDefaults.colors(checkedTrackColor = TdColors.Accent, checkedThumbColor = TdColors.Background),
+        )
+    }
+    if (progress.running) {
+        Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+            Text(
+                "Recherche des pochettes : ${progress.done} / ${progress.total} · ${progress.found} trouvée(s)",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Spacer(Modifier.height(6.dp))
+            LinearProgressIndicator(
+                progress = { if (progress.total > 0) progress.done.toFloat() / progress.total else 0f },
+                modifier = Modifier.fillMaxWidth(),
+                color = TdColors.Accent,
+                trackColor = TdColors.Divider,
+            )
+            Text(
+                "Environ 3 secondes par album (limite du catalogue). Vous pouvez utiliser l'appli normalement pendant ce temps.",
+                style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+            TextButton(onClick = { vm.stopCoverSearch() }) { Text("Arrêter") }
+        }
+    } else {
+        ListItemRow(
+            Icons.Outlined.ImageSearch, "Rechercher toutes les pochettes manquantes",
+            subtitle = if (progress.finished) "Terminé : ${progress.found} pochette(s) ajoutée(s). Appuyez pour relancer." else "Pour tous les titres et albums sans image. Connexion Internet nécessaire.",
+            onClick = { vm.startCoverSearch() },
+        )
+    }
+}
+
+@Composable
+private fun BackupSettings(vm: MainViewModel) {
+    val exportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")
+    ) { uri -> if (uri != null) vm.exportBackup(uri) }
+    val importLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+    ) { uri -> if (uri != null) vm.importBackup(uri) }
+    ListItemRow(
+        Icons.Outlined.Backup, "Sauvegarder mes données",
+        subtitle = "Playlists, favoris, écoutes, paroles, corrections et réglages dans un fichier",
+        onClick = { exportLauncher.launch(com.thousandlabs.tonedial.data.Backup.suggestedName()) },
+    )
+    ListItemRow(
+        Icons.Outlined.Restore, "Restaurer une sauvegarde",
+        subtitle = "Sur ce téléphone ou un nouveau. Les playlists du même nom sont fusionnées.",
+        onClick = { importLauncher.launch(arrayOf("application/json", "application/octet-stream", "text/plain", "*/*")) },
+    )
+    Text(
+        "Conseil : enregistrez la sauvegarde dans Google Drive ou envoyez-la-vous par WhatsApp, pour la retrouver si vous changez de téléphone.",
+        style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim,
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+    )
 }

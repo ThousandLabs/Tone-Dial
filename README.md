@@ -19,12 +19,18 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 - Égaliseur avec préréglages, amplificateur de basses et effet d'espace
 - Paroles : intégrées au fichier (MP3, FLAC), fichier `.lrc`, recherche automatique sur LRCLIB, recherche Google et collage, avec défilement synchronisé
 - Minuterie de sommeil (durée ou fin du titre), avec baisse progressive du son
-- Widget d'écran d'accueil
-- Définir un titre comme sonnerie, partager un fichier, informations détaillées
+- Widget d'écran d'accueil et raccourcis sur l'icône (Aléatoire, Reprendre, Rechercher)
+- Dossiers masqués (audios WhatsApp, enregistrements…), correction manuelle des informations sans modifier les fichiers
+- Pochettes manquantes recherchées en ligne ou choisies dans la galerie ; fond du lecteur aux couleurs de la pochette
+- Vitesse de lecture de 0,5× à 2× sans changement de tonalité
+- Statistiques d'écoute (7 jours, 30 jours, depuis toujours)
+- Sauvegarde et restauration des playlists, favoris, paroles et réglages
+- Définir un titre comme sonnerie, partager ou supprimer un fichier, informations détaillées
 - Reprise automatique de la lecture là où elle s'était arrêtée
 
 ## Nouveautés
 
+- **2.0** : dossiers masqués (audios WhatsApp…), correction manuelle titre/artiste/album, pochettes en ligne et depuis la galerie, sauvegarde et restauration, raccourcis d'icône, lecteur à glisser vers le bas, suppression de fichiers, vitesse de lecture, fond du lecteur aux couleurs de la pochette, statistiques d'écoute.
 - **1.9** : file d'attente en une seule liste entièrement réorganisable (y compris au-dessus du morceau en cours), numéros de position, bouton « En cours », vibration au glisser, file mémorisée dans l'ordre choisi (aléatoire compris) au redémarrage.
 - **1.8** : file d'attente en écran complet comme une playlist (en cours, à suivre, titres précédents repliés, enregistrer comme playlist) ; en aléatoire, le morceau choisi est toujours joué en premier.
 - **1.7** : identification automatique des artistes (« Artiste - Titre », mentions parasites retirées, artistes invités), pochettes et logo en grand dans la notification et le centre de contrôle, file d'attente réorganisable même en aléatoire, paroles en ligne (LRCLIB, Google, Coller).
@@ -58,6 +64,6 @@ Chaque modification publiée sur ce dépôt produit automatiquement une nouvelle
 
 - Kotlin, Jetpack Compose (Material 3), Media3 / ExoPlayer
 - Compilation et signature automatiques par GitHub Actions (`.github/workflows/build.yml`)
-- Aucune publicité. Internet sert uniquement aux mises à jour (GitHub) et à la recherche de paroles (LRCLIB) ; toutes les données restent sur le téléphone
+- Aucune publicité. Internet sert uniquement aux mises à jour (GitHub), à la recherche de paroles (LRCLIB) et de pochettes (catalogue iTunes) ; toutes les données restent sur le téléphone
 
 Site : [thousandlabs.github.io](https://thousandlabs.github.io)

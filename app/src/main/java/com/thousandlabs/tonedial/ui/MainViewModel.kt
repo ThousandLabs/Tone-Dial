@@ -71,6 +71,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val ctx: Context get() = getApplication()
 
+    /** Tous les titres du téléphone, dossiers exclus compris. */
+    private val _allSongs = MutableStateFlow<List<Song>>(emptyList())
+    val allSongs: StateFlow<List<Song>> = _allSongs.asStateFlow()
+
+    /** Titres affichés : dossiers exclus retirés, corrections manuelles appliquées. */
     private val _songs = MutableStateFlow<List<Song>>(emptyList())
     val songs: StateFlow<List<Song>> = _songs.asStateFlow()
 
@@ -126,11 +131,196 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun loadLibrary() {
         viewModelScope.launch {
             _loading.value = true
-            _songs.value = MusicRepository.loadSongs(ctx, UserStore.minDurationSec.value * 1000L, smartTags())
+            _allSongs.value = MusicRepository.loadSongs(ctx, UserStore.minDurationSec.value * 1000L, smartTags())
+            applyFilters()
             _loading.value = false
             tryRestore()
             refreshPlayer()
         }
+    }
+
+    private fun applyFilters() {
+        _songs.value = _allSongs.value
+            .filterNot { com.thousandlabs.tonedial.data.LibraryPrefs.isExcluded(it.folderPath) }
+            .map { com.thousandlabs.tonedial.data.LibraryPrefs.apply(it) }
+    }
+
+    /** Tous les dossiers contenant de la musique, pour le réglage des dossiers exclus. */
+    val allFolders: StateFlow<List<Folder>> =
+        _allSongs.map { MusicRepository.folders(it) }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val excludedFolders = com.thousandlabs.tonedial.data.LibraryPrefs.excluded
+
+    fun toggleExcludedFolder(path: String) {
+        com.thousandlabs.tonedial.data.LibraryPrefs.toggleExcluded(path)
+        applyFilters()
+    }
+
+    fun excludeFolders(paths: Collection<String>) {
+        com.thousandlabs.tonedial.data.LibraryPrefs.setExcluded(com.thousandlabs.tonedial.data.LibraryPrefs.excluded.value + paths)
+        applyFilters()
+        _messages.tryEmit(if (paths.size == 1) "Dossier masqué" else "${paths.size} dossiers masqués")
+    }
+
+    // ---------------- Corrections manuelles ----------------
+    fun setOverride(song: Song, title: String, artist: String, album: String) {
+        val original = _allSongs.value.firstOrNull { it.id == song.id } ?: song
+        com.thousandlabs.tonedial.data.LibraryPrefs.setOverride(
+            song.id,
+            com.thousandlabs.tonedial.data.LibraryPrefs.Override(
+                title.trim().takeIf { it.isNotBlank() && it != original.title },
+                artist.trim().takeIf { it.isNotBlank() && it != original.artist },
+                album.trim().takeIf { it.isNotBlank() && it != original.album },
+            ),
+        )
+        applyFilters()
+        lyricsFor = null
+        refreshPlayer()
+        _messages.tryEmit("Informations modifiées")
+    }
+
+    fun resetOverride(song: Song) {
+        com.thousandlabs.tonedial.data.LibraryPrefs.setOverride(song.id, null)
+        applyFilters()
+        _messages.tryEmit("Informations d'origine rétablies")
+    }
+
+    fun hasOverride(song: Song): Boolean = com.thousandlabs.tonedial.data.LibraryPrefs.overrides.value.containsKey(song.id)
+
+    fun originalSong(song: Song): Song = _allSongs.value.firstOrNull { it.id == song.id } ?: song
+
+    // ---------------- Pochettes ----------------
+    val coverProgress = com.thousandlabs.tonedial.data.Covers.progress
+
+    fun startCoverSearch() {
+        com.thousandlabs.tonedial.data.Covers.startBatch(ctx, _songs.value)
+    }
+
+    fun stopCoverSearch() = com.thousandlabs.tonedial.data.Covers.stopBatch()
+
+    fun searchCover(song: Song) {
+        viewModelScope.launch {
+            val ok = com.thousandlabs.tonedial.data.Covers.fetchOnline(song)
+            _messages.tryEmit(if (ok) "Pochette trouvée" else "Aucune pochette trouvée (ou pas de connexion)")
+        }
+    }
+
+    fun setCustomCover(song: Song, image: Uri) {
+        viewModelScope.launch {
+            val ok = com.thousandlabs.tonedial.data.Covers.setCustom(ctx, song.id, image)
+            _messages.tryEmit(if (ok) "Pochette modifiée" else "Impossible de lire cette image")
+        }
+    }
+
+    fun removeCustomCover(song: Song) {
+        com.thousandlabs.tonedial.data.Covers.removeCustom(song.id)
+        _messages.tryEmit("Pochette retirée")
+    }
+
+    fun hasCustomCover(song: Song) = com.thousandlabs.tonedial.data.Covers.hasCustom(song.id)
+
+    // ---------------- Suppression de fichiers ----------------
+    /**
+     * Prépare la suppression. Renvoie la demande de confirmation d'Android à afficher,
+     * ou null si la suppression a déjà été faite directement.
+     */
+    fun deleteRequest(songs: List<Song>): android.content.IntentSender? {
+        if (songs.isEmpty()) return null
+        val uris = songs.map { it.uri }
+        return when {
+            android.os.Build.VERSION.SDK_INT >= 30 ->
+                android.provider.MediaStore.createDeleteRequest(ctx.contentResolver, uris).intentSender
+            android.os.Build.VERSION.SDK_INT == 29 -> {
+                try {
+                    uris.forEach { ctx.contentResolver.delete(it, null, null) }
+                    onDeleted(songs); null
+                } catch (e: android.app.RecoverableSecurityException) {
+                    e.userAction.actionIntent.intentSender
+                }
+            }
+            else -> {
+                runCatching { uris.forEach { ctx.contentResolver.delete(it, null, null) } }
+                onDeleted(songs); null
+            }
+        }
+    }
+
+    /** Après suppression : retire les titres de la file et des playlists, puis actualise. */
+    fun onDeleted(songs: List<Song>) {
+        val ids = songs.map { it.id }.toSet()
+        val c = controller
+        if (c != null) {
+            for (i in c.mediaItemCount - 1 downTo 0) {
+                val mid = c.getMediaItemAt(i).mediaId.toLongOrNull()
+                if (mid != null && mid in ids) c.removeMediaItem(i)
+            }
+        }
+        UserStore.playlists.value.forEach { p -> if (p.songIds.any { it in ids }) UserStore.removeFromPlaylist(p.id, ids.toList()) }
+        UserStore.setFavorites(ids.toList(), false)
+        _messages.tryEmit(if (songs.size == 1) "Fichier supprimé du téléphone" else "${songs.size} fichiers supprimés du téléphone")
+        loadLibrary()
+    }
+
+    // ---------------- Vitesse de lecture ----------------
+    private val _speed = MutableStateFlow(UserStore.getInt("speed_pct", 100) / 100f)
+    val speed: StateFlow<Float> = _speed.asStateFlow()
+
+    fun setSpeed(value: Float) {
+        _speed.value = value
+        UserStore.putInt("speed_pct", (value * 100).toInt())
+        controller?.setPlaybackSpeed(value)
+    }
+
+    // ---------------- Sauvegarde ----------------
+    fun exportBackup(target: Uri) {
+        viewModelScope.launch {
+            com.thousandlabs.tonedial.data.Backup.export(ctx, target, _allSongs.value)
+                .onSuccess { _messages.tryEmit("Sauvegarde enregistrée ($it playlists)") }
+                .onFailure { _messages.tryEmit("Échec de la sauvegarde : ${it.message ?: "erreur"}") }
+        }
+    }
+
+    fun importBackup(source: Uri) {
+        viewModelScope.launch {
+            com.thousandlabs.tonedial.data.Backup.import(ctx, source, _allSongs.value.map { com.thousandlabs.tonedial.data.LibraryPrefs.apply(it) })
+                .onSuccess { r ->
+                    UserStore.setMinDurationSec(UserStore.getInt("min_duration_sec", 30))
+                    loadLibrary()
+                    _messages.tryEmit(
+                        "Restauré : ${r.playlists} playlist(s), ${r.matched} titre(s) retrouvé(s)" +
+                            if (r.missing > 0) ", ${r.missing} introuvable(s) sur ce téléphone" else ""
+                    )
+                }
+                .onFailure { _messages.tryEmit(it.message ?: "Restauration impossible") }
+        }
+    }
+
+    // ---------------- Statistiques ----------------
+    val statsVersion = com.thousandlabs.tonedial.data.ListenStats.version
+    fun stats(days: Int?) = com.thousandlabs.tonedial.data.ListenStats.summary(days)
+
+    // ---------------- Raccourcis de l'icône ----------------
+    private val _shortcut = MutableStateFlow<String?>(null)
+    val shortcut: StateFlow<String?> = _shortcut.asStateFlow()
+
+    fun onShortcut(action: String?) {
+        if (action != null && action.startsWith("com.thousandlabs.tonedial.")) _shortcut.value = action
+    }
+
+    /** Exécute le raccourci dès que la bibliothèque et le lecteur sont prêts. */
+    fun consumeShortcut(): String? {
+        val a = _shortcut.value ?: return null
+        if (a.endsWith(".SEARCH")) { _shortcut.value = null; return a }
+        if (controller == null || _songs.value.isEmpty()) return null
+        _shortcut.value = null
+        when {
+            a.endsWith(".SHUFFLE") -> play(_songs.value, shuffle = true)
+            a.endsWith(".RESUME") -> controller?.let { c ->
+                if (c.mediaItemCount == 0) play(_songs.value, shuffle = true)
+                else { if (c.playbackState == Player.STATE_IDLE) c.prepare(); c.play() }
+            }
+        }
+        return a
     }
 
     fun setSort(s: SongSort) = UserStore.setSort(s)
@@ -191,6 +381,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val c = MediaController.Builder(ctx, token).buildAsync().await()
                 c.addListener(listener)
                 controller = c
+                if (_speed.value != 1f) c.setPlaybackSpeed(_speed.value)
                 tryRestore()
                 refreshPlayer()
                 startTicker()
@@ -269,6 +460,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             currentWindow = c.currentMediaItemIndex,
         )
         if (currentId != lyricsFor) {
+            currentId?.let { id -> songMap.value[id]?.let { com.thousandlabs.tonedial.data.Covers.autoFetch(ctx, it) } }
             lyricsFor = currentId
             _lyrics.value = null
             val song = currentId?.let { songMap.value[it] }

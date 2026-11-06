@@ -34,6 +34,8 @@ sealed interface Screen {
     data class PlaylistDetail(val id: Long) : Screen
     data class AddToPlaylist(val id: Long) : Screen
     data class Queue(val fromPlayer: Boolean) : Screen
+    data object FolderFilter : Screen
+    data object Stats : Screen
     data class AutoDetail(val kind: AutoList) : Screen
     data object Search : Screen
     data object Equalizer : Screen
@@ -50,6 +52,10 @@ class Nav(
     val openPlayer: () -> Unit,
     val selection: Selection,
     val flags: UiFlags,
+    /** Demande à Android la suppression des fichiers (avec confirmation). */
+    val deleteSongs: (List<Song>) -> Unit = {},
+    /** Ouvre la galerie pour choisir la pochette d'un titre. */
+    val pickCover: (Song) -> Unit = {},
 )
 
 @Composable
@@ -82,6 +88,25 @@ fun AppRoot(vm: MainViewModel) {
         if (top is Screen.Queue && top.fromPlayer) flags.playerOpen = true
     }
 
+    // Suppression de fichiers : la confirmation d'Android revient ici
+    var pendingDelete by remember { mutableStateOf<List<Song>>(emptyList()) }
+    var confirmDelete by remember { mutableStateOf<List<Song>>(emptyList()) }
+    val deleteLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK && pendingDelete.isNotEmpty()) vm.onDeleted(pendingDelete)
+        pendingDelete = emptyList()
+    }
+    // Pochette choisie dans la galerie
+    var coverFor by remember { mutableStateOf<Song?>(null) }
+    val coverLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        val song = coverFor
+        if (uri != null && song != null) vm.setCustomCover(song, uri)
+        coverFor = null
+    }
+
     val nav = remember {
         Nav(
             go = { s -> selection.clear(); stack = stack + s; flags.playerOpen = false },
@@ -90,7 +115,52 @@ fun AppRoot(vm: MainViewModel) {
             openPlayer = { flags.playerOpen = true },
             selection = selection,
             flags = flags,
+            deleteSongs = { songs -> if (songs.isNotEmpty()) confirmDelete = songs },
+            pickCover = { song ->
+                coverFor = song
+                coverLauncher.launch(
+                    androidx.activity.result.PickVisualMediaRequest(
+                        androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly
+                    )
+                )
+            },
         )
+    }
+
+    if (confirmDelete.isNotEmpty()) {
+        val list = confirmDelete
+        AlertDialog(
+            onDismissRequest = { confirmDelete = emptyList() },
+            title = { Text(if (list.size == 1) "Supprimer le fichier ?" else "Supprimer ${list.size} fichiers ?") },
+            text = {
+                Text(
+                    (if (list.size == 1) "« ${list.first().title} » sera supprimé définitivement du téléphone."
+                    else "Ces ${list.size} titres seront supprimés définitivement du téléphone.") +
+                        " Android peut vous demander une dernière confirmation."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDelete = emptyList()
+                    val sender = runCatching { vm.deleteRequest(list) }.getOrNull()
+                    if (sender != null) {
+                        pendingDelete = list
+                        deleteLauncher.launch(androidx.activity.result.IntentSenderRequest.Builder(sender).build())
+                    }
+                }) { Text("Supprimer", color = TdColors.Accent) }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = emptyList() }) { Text("Annuler") } },
+            containerColor = TdColors.Surface,
+        )
+    }
+
+    // Raccourcis de l'icône (Lecture aléatoire, Reprendre, Rechercher)
+    val shortcut by vm.shortcut.collectAsStateWithLifecycle()
+    val libSongs by vm.songs.collectAsStateWithLifecycle()
+    LaunchedEffect(shortcut, libSongs.size, player.currentId) {
+        val done = vm.consumeShortcut() ?: return@LaunchedEffect
+        if (done.endsWith(".SEARCH")) nav.go(Screen.Search)
+        else if (done.endsWith(".SHUFFLE")) flags.playerOpen = true
     }
 
     // Retour : ferme le lecteur, annule la sélection, ou revient à l'écran précédent
@@ -135,6 +205,8 @@ fun AppRoot(vm: MainViewModel) {
                         is Screen.PlaylistDetail -> PlaylistDetailScreen(vm, nav, s.id)
                         is Screen.AddToPlaylist -> PlaylistPickerScreen(vm, nav, s.id)
                         is Screen.Queue -> QueueScreen(vm, nav)
+                        Screen.FolderFilter -> FolderFilterScreen(vm, nav)
+                        Screen.Stats -> StatsScreen(vm, nav)
                         is Screen.AutoDetail -> AutoDetailScreen(vm, nav, s.kind)
                         Screen.Search -> SearchScreen(vm, nav)
                         Screen.Equalizer -> EqualizerScreen(nav)
@@ -143,7 +215,7 @@ fun AppRoot(vm: MainViewModel) {
                         Screen.About -> AboutScreen(nav)
                     }
                     if (selection.active) {
-                        SelectionBar(vm, selection)
+                        SelectionBar(vm, selection, onDelete = nav.deleteSongs)
                     }
                 }
                 if (current != null) {
@@ -170,7 +242,7 @@ fun AppRoot(vm: MainViewModel) {
 
 /** Barre affichée en haut pendant une sélection multiple. */
 @Composable
-private fun SelectionBar(vm: MainViewModel, selection: Selection) {
+private fun SelectionBar(vm: MainViewModel, selection: Selection, onDelete: (List<Song>) -> Unit) {
     val playlists by vm.playlists.collectAsStateWithLifecycle()
     val favorites by vm.favorites.collectAsStateWithLifecycle()
     var menu by remember { mutableStateOf(false) }
@@ -231,6 +303,11 @@ private fun SelectionBar(vm: MainViewModel, selection: Selection) {
                         leadingIcon = { Icon(if (allFav) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder, null) },
                         onClick = { menu = false; vm.setFavorites(selection.songs(), !allFav); selection.clear() },
                     )
+                    DropdownMenuItem(
+                        text = { Text("Supprimer du téléphone") },
+                        leadingIcon = { Icon(Icons.Outlined.DeleteForever, null) },
+                        onClick = { menu = false; onDelete(selection.songs()); selection.clear() },
+                    )
                     selection.playlist?.let { p ->
                         DropdownMenuItem(
                             text = { Text("Retirer de « ${p.name} »") },
@@ -268,6 +345,35 @@ fun SongMenuSheet(
             onCreate = { vm.createPlaylist(it, listOf(song)); dialog = null; onDismiss() },
         )
         "info" -> SongInfoDialog(song, vm.playCount(song.id)) { dialog = null; onDismiss() }
+        "edit" -> EditInfoDialog(
+            song = song,
+            original = vm.originalSong(song),
+            hasOverride = vm.hasOverride(song),
+            onDismiss = { dialog = null; onDismiss() },
+            onSave = { t, a, al -> vm.setOverride(song, t, a, al); dialog = null; onDismiss() },
+            onReset = { vm.resetOverride(song); dialog = null; onDismiss() },
+        )
+        "cover" -> AlertDialog(
+            onDismissRequest = { dialog = null; onDismiss() },
+            title = { Text("Pochette") },
+            text = {
+                Column {
+                    ListItemRow(Icons.Outlined.Image, "Choisir une image", subtitle = "Depuis la galerie du téléphone", onClick = {
+                        nav.pickCover(song); dialog = null; onDismiss()
+                    })
+                    ListItemRow(Icons.Outlined.Search, "Chercher la pochette en ligne", subtitle = "Pochette officielle du titre", onClick = {
+                        vm.searchCover(song); dialog = null; onDismiss()
+                    })
+                    if (vm.hasCustomCover(song)) {
+                        ListItemRow(Icons.Outlined.Delete, "Retirer l'image ajoutée", onClick = {
+                            vm.removeCustomCover(song); dialog = null; onDismiss()
+                        })
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { dialog = null; onDismiss() }) { Text("Fermer") } },
+            containerColor = TdColors.Surface,
+        )
         "lyrics" -> TextInputDialog(
             title = "Paroles de « ${song.title} »",
             initial = com.thousandlabs.tonedial.data.UserStore.customLyrics(song.id) ?: "",
@@ -339,7 +445,12 @@ fun SongMenuSheet(
                         runCatching { context.startActivity(vm.shareIntent(song)) }
                         onDismiss()
                     })
+                    ListItemRow(Icons.Outlined.Edit, "Modifier titre, artiste, album", subtitle = "Sans toucher au fichier", onClick = { dialog = "edit" })
+                    ListItemRow(Icons.Outlined.Image, "Pochette", subtitle = "Image de la galerie ou recherche en ligne", onClick = { dialog = "cover" })
                     ListItemRow(Icons.Outlined.Info, "Informations", onClick = { dialog = "info" })
+                    ListItemRow(Icons.Outlined.DeleteForever, "Supprimer du téléphone", tint = androidx.compose.ui.graphics.Color(0xFFE57373), onClick = {
+                        nav.deleteSongs(listOf(song)); onDismiss()
+                    })
                     Spacer(Modifier.height(12.dp))
                 }
             }

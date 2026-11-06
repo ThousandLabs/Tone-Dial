@@ -80,6 +80,7 @@ dependencies {
     implementation("androidx.media3:media3-common:$media3")
 
     implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("androidx.palette:palette-ktx:1.0.0")
     implementation("com.google.guava:guava:33.3.1-android")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-guava:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")

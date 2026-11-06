@@ -77,6 +77,7 @@ object UserStore {
 
     // ---------- Statistiques d'écoute ----------
     fun recordPlay(id: Long) {
+        ListenStats.recordPlay(id)
         val counts = _playCounts.value.toMutableMap()
         counts[id] = (counts[id] ?: 0) + 1
         _playCounts.value = counts
@@ -214,6 +215,41 @@ object UserStore {
     fun setMinDurationSec(sec: Int) {
         _minDurationSec.value = sec
         prefs.edit().putInt("min_duration_sec", sec).apply()
+    }
+
+    fun getString(key: String): String? = prefs.getString(key, null)
+    fun putString(key: String, value: String?) {
+        if (value == null) prefs.edit().remove(key).apply() else prefs.edit().putString(key, value).apply()
+    }
+    fun getLong(key: String, def: Long) = prefs.getLong(key, def)
+    fun putLong(key: String, value: Long) = prefs.edit().putLong(key, value).apply()
+    fun allLyrics(): Map<Long, Pair<String, String?>> =
+        prefs.all.keys.filter { it.startsWith("lyrics_") && !it.startsWith("lyrics_src_") }
+            .mapNotNull { k ->
+                val id = k.removePrefix("lyrics_").toLongOrNull() ?: return@mapNotNull null
+                val text = prefs.getString(k, null) ?: return@mapNotNull null
+                id to (text to prefs.getString("lyrics_src_$id", null))
+            }.toMap()
+
+    /** Remplace les données personnelles lors d'une restauration. */
+    fun replacePlaylists(list: List<Playlist>) = savePlaylists(list)
+
+    fun replaceFavorites(ids: Set<Long>, addedAt: Map<Long, Long>) {
+        _favorites.value = ids
+        favAdded.clear()
+        favAdded.putAll(addedAt)
+        prefs.edit()
+            .putString("favorites", JSONArray(ids.toList()).toString())
+            .putString("fav_added", JSONObject(favAdded.mapKeys { it.key.toString() }).toString())
+            .apply()
+    }
+
+    fun addPlayCounts(extra: Map<Long, Int>) {
+        if (extra.isEmpty()) return
+        val counts = _playCounts.value.toMutableMap()
+        extra.forEach { (id, n) -> counts[id] = (counts[id] ?: 0) + n }
+        _playCounts.value = counts
+        prefs.edit().putString("play_counts", JSONObject(counts.mapKeys { it.key.toString() }).toString()).apply()
     }
 
     fun getInt(key: String, def: Int) = prefs.getInt(key, def)

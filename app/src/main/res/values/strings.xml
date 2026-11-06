@@ -2,4 +2,10 @@
 <resources>
     <string name="app_name">Tone Dial</string>
     <string name="widget_description">Contrôles de lecture Tone Dial</string>
+    <string name="sc_shuffle">Aléatoire</string>
+    <string name="sc_shuffle_long">Lecture aléatoire de tout</string>
+    <string name="sc_resume">Reprendre</string>
+    <string name="sc_resume_long">Reprendre la lecture</string>
+    <string name="sc_search">Rechercher</string>
+    <string name="sc_search_long">Rechercher une musique</string>
 </resources>

@@ -13,13 +13,13 @@ import coil.key.Keyer
 import coil.request.Options
 
 /** Pochette d'un morceau : image de l'album, sinon image intégrée au fichier. */
-data class SongArt(val songId: Long, val albumId: Long)
+data class SongArt(val songId: Long, val albumId: Long, val stamp: Long = 0L)
 
-fun Song.art() = SongArt(id, albumId)
-fun Album.art() = SongArt(songs.firstOrNull()?.id ?: -1L, id)
+fun Song.art() = SongArt(id, albumId, Covers.stamp(id, albumId))
+fun Album.art() = (songs.firstOrNull()?.id ?: -1L).let { SongArt(it, id, Covers.stamp(it, id)) }
 
 class SongArtKeyer : Keyer<SongArt> {
-    override fun key(data: SongArt, options: Options): String = "art_${data.albumId}_${data.songId}"
+    override fun key(data: SongArt, options: Options): String = "art_${data.albumId}_${data.songId}_${data.stamp}"
 }
 
 class SongArtFetcher(private val data: SongArt, private val options: Options) : Fetcher {
@@ -43,7 +43,8 @@ class SongArtFetcher(private val data: SongArt, private val options: Options) : 
 
 /** Lecture des pochettes : image de l'album enregistrée par Android, sinon image intégrée au fichier. */
 object ArtBytes {
-    fun load(context: android.content.Context, songId: Long, albumId: Long): ByteArray? {
+    fun load(context: android.content.Context, songId: Long, albumId: Long, includeLocal: Boolean = true): ByteArray? {
+        if (includeLocal) Covers.localBytes(songId, albumId)?.let { return it }
         val album = runCatching {
             context.contentResolver.openInputStream(Song.albumArtUri(albumId))?.use { it.readBytes() }
         }.getOrNull()

@@ -42,6 +42,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -79,9 +80,11 @@ fun Artwork(
         contentAlignment = Alignment.Center,
     ) {
         Icon(placeholder, null, tint = TdColors.TextDim, modifier = Modifier.size(size * 0.45f))
+        val coverVersion by com.thousandlabs.tonedial.data.Covers.version.collectAsState()
         if (art != null) {
+            val model = remember(art, coverVersion) { art.copy(stamp = com.thousandlabs.tonedial.data.Covers.stamp(art.songId, art.albumId)) }
             AsyncImage(
-                model = art,
+                model = model,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
@@ -99,8 +102,10 @@ fun ArtworkFill(art: SongArt?, modifier: Modifier = Modifier, corner: Dp = 12.dp
         contentAlignment = Alignment.Center,
     ) {
         Icon(placeholder, null, tint = TdColors.TextDim, modifier = Modifier.size(40.dp))
+        val coverVersion by com.thousandlabs.tonedial.data.Covers.version.collectAsState()
         if (art != null) {
-            AsyncImage(model = art, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            val model = remember(art, coverVersion) { art.copy(stamp = com.thousandlabs.tonedial.data.Covers.stamp(art.songId, art.albumId)) }
+            AsyncImage(model = model, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         }
     }
 }
@@ -332,3 +337,48 @@ fun AddToPlaylistDialog(
 fun pluralTitles(n: Int) = if (n <= 1) "$n titre" else "$n titres"
 
 fun totalDuration(songs: List<Song>) = formatDuration(songs.sumOf { it.duration })
+
+/** Correction du titre, de l'artiste et de l'album, enregistrée dans l'appli uniquement. */
+@Composable
+fun EditInfoDialog(
+    song: Song,
+    original: Song,
+    hasOverride: Boolean,
+    onDismiss: () -> Unit,
+    onSave: (title: String, artist: String, album: String) -> Unit,
+    onReset: () -> Unit,
+) {
+    var title by remember { mutableStateOf(song.title) }
+    var artist by remember { mutableStateOf(if (song.artist == "Artiste inconnu") "" else song.artist) }
+    var album by remember { mutableStateOf(if (song.album == "Album inconnu") "" else song.album) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Modifier les informations") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Titre") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(
+                    value = artist, onValueChange = { artist = it }, label = { Text("Artiste") }, singleLine = true,
+                    supportingText = { Text("Plusieurs artistes : séparez par « feat. » ou une virgule") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(value = album, onValueChange = { album = it }, label = { Text("Album") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Text(
+                    "Le fichier n'est pas modifié : la correction s'applique dans Tone Dial uniquement. Nom du fichier : ${original.path.substringAfterLast('/')}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TdColors.TextDim,
+                )
+                if (hasOverride) {
+                    TextButton(onClick = onReset) { Text("Rétablir les informations d'origine") }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onSave(title, artist.ifBlank { "Artiste inconnu" }, album.ifBlank { "Album inconnu" })
+            }, enabled = title.isNotBlank()) { Text("Enregistrer") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Annuler") } },
+        containerColor = TdColors.Surface,
+    )
+}

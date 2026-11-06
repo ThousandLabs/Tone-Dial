@@ -41,11 +41,21 @@ class PlaybackService : MediaSessionService() {
     private var session: MediaSession? = null
     private val handler = Handler(Looper.getMainLooper())
 
+    private var lastTick = 0L
+
+    /** Toutes les 10 secondes : position de reprise et temps d'écoute pour les statistiques. */
     private val saveLoop = object : Runnable {
         override fun run() {
+            val now = android.os.SystemClock.elapsedRealtime()
             if (::player.isInitialized && player.isPlaying) {
                 UserStore.savePosition(playPosition(), player.currentPosition)
+                val id = player.currentMediaItem?.mediaId?.toLongOrNull()
+                if (id != null && lastTick > 0) {
+                    val elapsed = ((now - lastTick) * player.playbackParameters.speed).toLong().coerceAtMost(15_000)
+                    com.thousandlabs.tonedial.data.ListenStats.addListening(id, elapsed)
+                }
             }
+            lastTick = if (::player.isInitialized && player.isPlaying) now else 0L
             handler.postDelayed(this, 10_000)
         }
     }
@@ -53,6 +63,7 @@ class PlaybackService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         UserStore.init(this)
+        com.thousandlabs.tonedial.data.Covers.init(this)
 
         player = ExoPlayer.Builder(this)
             .setAudioAttributes(
@@ -83,6 +94,14 @@ class PlaybackService : MediaSessionService() {
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                // compte le temps écoulé depuis le dernier relevé, puis repart de zéro
+                val now = android.os.SystemClock.elapsedRealtime()
+                val id = player.currentMediaItem?.mediaId?.toLongOrNull()
+                if (!isPlaying && id != null && lastTick > 0) {
+                    com.thousandlabs.tonedial.data.ListenStats.addListening(id, (now - lastTick).coerceIn(0, 15_000))
+                    com.thousandlabs.tonedial.data.ListenStats.save()
+                }
+                lastTick = if (isPlaying) now else 0L
                 if (!isPlaying) UserStore.savePosition(playPosition(), player.currentPosition)
                 PlayerWidget.updateAll(this@PlaybackService)
             }

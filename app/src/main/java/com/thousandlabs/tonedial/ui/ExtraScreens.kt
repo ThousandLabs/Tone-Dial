@@ -168,6 +168,7 @@ private val guide = listOf(
             "Les onglets Titres, Albums, Artistes, Dossiers et Playlists permettent de parcourir la musique de plusieurs façons. Glissez de gauche à droite pour passer d'un onglet à l'autre.",
             "Après avoir téléchargé de nouvelles musiques, ouvrez le menu (trois points en haut) puis « Actualiser la bibliothèque ».",
             "Les notes vocales et sons courts sont masqués. Réglez la durée minimale dans Menu > Réglages.",
+            "Pour masquer des dossiers entiers (audios WhatsApp, enregistrements, sonneries) : Menu > Réglages > Dossiers affichés. L'appli repère d'elle-même les dossiers de messagerie et propose de les masquer en un appui. Dans l'onglet Dossiers, l'icône en forme d'œil barré masque aussi le dossier ouvert.",
         ),
     ),
     GuideSection(
@@ -176,7 +177,8 @@ private val guide = listOf(
             "Beaucoup de musiques téléchargées n'ont pas d'artiste renseigné, et leur nom ressemble à « Oliver Tree - Life Goes On ». Tone Dial sépare alors automatiquement l'artiste et le titre.",
             "Les mentions inutiles sont retirées des titres : (Official Video), [Lyrics], (Audio), (Clip Officiel), noms de sites de téléchargement, numéros de piste…",
             "Les artistes invités sont reconnus (feat., ft., virgules, « & ») : un titre « Dadju feat. Tayc » apparaît chez Dadju et chez Tayc dans l'onglet Artistes. Le menu d'un titre propose d'ouvrir chacun de ses artistes.",
-            "Vos fichiers ne sont jamais modifiés. Pour désactiver cette fonction : Menu > Réglages > Identifier les artistes.",
+            "Si un titre est mal reconnu : menu du titre > « Modifier titre, artiste, album ». La correction s'applique partout dans l'appli, et « Rétablir » revient aux informations d'origine.",
+            "Vos fichiers ne sont jamais modifiés. Pour désactiver la reconnaissance automatique : Menu > Réglages > Identifier les artistes.",
         ),
     ),
     GuideSection(
@@ -191,9 +193,19 @@ private val guide = listOf(
         ),
     ),
     GuideSection(
+        Icons.Outlined.Image, "Pochettes",
+        listOf(
+            "Quand un titre sans image est joué, Tone Dial cherche sa pochette officielle en ligne (catalogue public iTunes) et la garde sur le téléphone. Réglage : Menu > Réglages > Pochettes automatiques.",
+            "Pour tout compléter d'un coup : Menu > Réglages > « Rechercher toutes les pochettes manquantes ». Comptez environ 3 secondes par album ; vous pouvez utiliser l'appli pendant ce temps.",
+            "Pour choisir vous-même : menu du titre > Pochette > « Choisir une image » dans la galerie, ou « Chercher la pochette en ligne ».",
+            "Le fond du lecteur prend les couleurs de la pochette du titre en cours.",
+        ),
+    ),
+    GuideSection(
         Icons.Outlined.MoreVert, "Menu d'un morceau",
         listOf(
-            "Appuyez sur les trois points d'un titre pour : le lire juste après, l'ajouter à la file d'attente ou à une playlist, le mettre en favori, voir son album ou son artiste, le définir comme sonnerie, le partager ou afficher ses informations.",
+            "Appuyez sur les trois points d'un titre pour : le lire juste après, l'ajouter à la file d'attente ou à une playlist, le mettre en favori, voir son album ou ses artistes, modifier ses informations ou sa pochette, le définir comme sonnerie, le partager, afficher ses informations ou le supprimer du téléphone.",
+            "« Supprimer du téléphone » efface vraiment le fichier, après une confirmation de Tone Dial puis d'Android. Il est aussi retiré de la file, des playlists et des favoris. La sélection multiple permet d'en supprimer plusieurs d'un coup.",
         ),
     ),
     GuideSection(
@@ -210,6 +222,8 @@ private val guide = listOf(
         Icons.Outlined.Swipe, "Gestes et navigation",
         listOf(
             "Balayez la barre de lecture du bas, ou la pochette dans le lecteur, vers la gauche pour le titre suivant et vers la droite pour le précédent.",
+            "Dans le lecteur, glissez vers le bas pour le réduire.",
+            "Restez appuyé sur l'icône Tone Dial de l'écran d'accueil : « Aléatoire », « Reprendre » et « Rechercher » sont accessibles directement.",
             "Le bouton retour vous ramène d'abord à l'onglet Titres. Depuis Titres, appuyez deux fois de suite sur retour pour quitter l'appli. La musique continue si elle était en lecture.",
         ),
     ),
@@ -263,6 +277,28 @@ private val guide = listOf(
             "Dans le lecteur, appuyez sur « Minuterie » et choisissez une durée, ou « À la fin du titre en cours ».",
             "Le temps restant s'affiche sous l'icône. Appuyez à nouveau pour l'arrêter.",
             "À la fin du délai, le son baisse doucement pendant quelques secondes avant la pause.",
+        ),
+    ),
+    GuideSection(
+        Icons.Outlined.Speed, "Vitesse de lecture",
+        listOf(
+            "Dans le lecteur, « Vitesse » permet de lire de 0,5× à 2×, sans changer la tonalité des voix. Pratique pour les podcasts et les cours audio.",
+            "La vitesse choisie est gardée ; revenez à « Normale » pour la musique.",
+        ),
+    ),
+    GuideSection(
+        Icons.Outlined.BarChart, "Statistiques",
+        listOf(
+            "Menu > Statistiques d'écoute : temps d'écoute, nombre d'écoutes et jours actifs sur 7 jours, 30 jours ou depuis toujours.",
+            "Un graphique montre l'écoute jour par jour, suivi de vos 10 titres et 5 artistes préférés. Appuyez sur un titre pour le lancer.",
+        ),
+    ),
+    GuideSection(
+        Icons.Outlined.Backup, "Sauvegarde",
+        listOf(
+            "Menu > Réglages > « Sauvegarder mes données » crée un fichier avec vos playlists, favoris, écoutes, paroles, corrections, dossiers masqués et réglages.",
+            "Enregistrez-le dans Google Drive ou envoyez-le-vous par WhatsApp. Sur un nouveau téléphone, installez Tone Dial puis « Restaurer une sauvegarde » : les titres sont retrouvés par leur emplacement, sinon par titre et artiste.",
+            "Faites une sauvegarde de temps en temps : si l'appli est désinstallée, ses données sont effacées par Android.",
         ),
     ),
     GuideSection(
@@ -382,7 +418,7 @@ fun AboutScreen(nav: Nav) {
                 ListItemRow(Icons.Outlined.Language, "Site Thousand Labs", subtitle = SITE_URL.removePrefix("https://"), onClick = { open(SITE_URL) })
                 SectionLabel("Confidentialité")
                 Text(
-                    "Vos musiques, playlists, favoris et statistiques d'écoute restent uniquement sur votre téléphone. Tone Dial ne contient aucune publicité. La connexion Internet sert uniquement à vérifier les mises à jour sur GitHub (désactivable ci-dessus) et à chercher les paroles sur LRCLIB : seuls le titre et l'artiste du morceau sont envoyés.",
+                    "Vos musiques, playlists, favoris et statistiques d'écoute restent uniquement sur votre téléphone. Tone Dial ne contient aucune publicité. La connexion Internet sert uniquement à vérifier les mises à jour sur GitHub (désactivable ci-dessus) à chercher les paroles (LRCLIB) et les pochettes (catalogue iTunes) : seuls le titre et l'artiste du morceau sont envoyés.",
                     modifier = Modifier.padding(horizontal = 20.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = TdColors.TextDim,

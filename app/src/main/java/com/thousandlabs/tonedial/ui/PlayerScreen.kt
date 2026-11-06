@@ -23,6 +23,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -76,12 +79,32 @@ fun PlayerScreen(vm: MainViewModel, nav: Nav, song: Song, ui: PlayerUi, onClose:
     val timer by SleepTimer.state.collectAsStateWithLifecycle()
     var showLyrics by remember { mutableStateOf(false) }
     var showTimer by remember { mutableStateOf(false) }
+    var showSpeed by remember { mutableStateOf(false) }
+    val speed by vm.speed.collectAsStateWithLifecycle()
+    val artColor = rememberArtColor(song)
+    // glisser vers le bas pour fermer le lecteur
+    var dragDown by remember { mutableFloatStateOf(0f) }
 
     Box(
         Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(TdColors.SurfaceHigh, TdColors.Background, TdColors.Background)))
+            .graphicsLayer { translationY = dragDown }
+            .background(Brush.verticalGradient(listOf(artColor, TdColors.Background, TdColors.Background)))
             .clickable(enabled = false) {}
+            .pointerInput(Unit) {
+                detectVerticalDragGestures(
+                    onDragEnd = {
+                        if (dragDown > 220f) onClose()
+                        dragDown = 0f
+                    },
+                    onDragCancel = { dragDown = 0f },
+                ) { change, amount ->
+                    if (amount > 0 || dragDown > 0) {
+                        dragDown = (dragDown + amount).coerceAtLeast(0f)
+                        change.consume()
+                    }
+                }
+            }
     ) {
         Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
             // Barre du haut
@@ -182,12 +205,14 @@ fun PlayerScreen(vm: MainViewModel, nav: Nav, song: Song, ui: PlayerUi, onClose:
                 ToolButton(Icons.Outlined.Subject, "Paroles", active = showLyrics) { showLyrics = !showLyrics }
                 ToolButton(Icons.Outlined.QueueMusic, "File") { nav.go(Screen.Queue(fromPlayer = true)) }
                 ToolButton(Icons.Outlined.Timer, if (timer.active) timerLabel(timer) else "Minuterie", active = timer.active) { showTimer = true }
+                ToolButton(Icons.Outlined.Speed, if (speed == 1f) "Vitesse" else formatSpeed(speed), active = speed != 1f) { showSpeed = true }
                 ToolButton(Icons.Outlined.Equalizer, "Égaliseur") { onClose(); nav.go(Screen.Equalizer) }
             }
         }
     }
 
     if (showTimer) SleepTimerDialog(onDismiss = { showTimer = false })
+    if (showSpeed) SpeedDialog(current = speed, onPick = { vm.setSpeed(it) }, onDismiss = { showSpeed = false })
 }
 
 @Composable
@@ -442,4 +467,67 @@ private fun SleepTimerDialog(onDismiss: () -> Unit) {
         confirmButton = { TextButton(onClick = onDismiss) { Text("Fermer") } },
         containerColor = TdColors.Surface,
     )
+}
+
+
+private fun formatSpeed(v: Float): String =
+    (if (v % 1f == 0f) "%.0f" else if ((v * 10) % 1f == 0f) "%.1f" else "%.2f").format(v).replace('.', ',') + "×"
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun SpeedDialog(current: Float, onPick: (Float) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Vitesse de lecture") },
+        text = {
+            Column {
+                Text(
+                    "La tonalité est conservée : les voix ne deviennent ni aiguës ni graves. Pratique pour les podcasts et les cours audio.",
+                    style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim,
+                )
+                Spacer(Modifier.height(12.dp))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(0.5f, 0.75f, 0.9f, 1f, 1.1f, 1.25f, 1.5f, 1.75f, 2f).forEach { v ->
+                        FilterChip(
+                            selected = current == v,
+                            onClick = { onPick(v) },
+                            label = { Text(if (v == 1f) "Normale" else formatSpeed(v)) },
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = TdColors.AccentDim, selectedLabelColor = TdColors.Accent),
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Fermer") } },
+        containerColor = TdColors.Surface,
+    )
+}
+
+/** Couleur dominante (sombre) de la pochette, pour le fond du lecteur. */
+@Composable
+private fun rememberArtColor(song: Song): androidx.compose.ui.graphics.Color {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val coverVersion by com.thousandlabs.tonedial.data.Covers.version.collectAsStateWithLifecycle()
+    var target by remember { mutableStateOf(TdColors.SurfaceHigh) }
+    LaunchedEffect(song.id, coverVersion) {
+        val request = coil.request.ImageRequest.Builder(context)
+            .data(song.art())
+            .allowHardware(false)
+            .size(96)
+            .build()
+        val result = coil.Coil.imageLoader(context).execute(request)
+        val bmp = (result.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+        if (bmp == null) {
+            target = TdColors.SurfaceHigh
+            return@LaunchedEffect
+        }
+        val rgb = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            val p = androidx.palette.graphics.Palette.from(bmp).generate()
+            p.getDarkVibrantColor(p.getMutedColor(p.getDominantColor(0)))
+        }
+        target = if (rgb == 0) TdColors.SurfaceHigh
+        else androidx.compose.ui.graphics.Color(androidx.core.graphics.ColorUtils.blendARGB(rgb, 0xFF0D1017.toInt(), 0.35f))
+    }
+    val animated by androidx.compose.animation.animateColorAsState(target, label = "artColor")
+    return animated
 }

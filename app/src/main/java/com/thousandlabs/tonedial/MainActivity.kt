@@ -49,6 +49,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         com.thousandlabs.tonedial.update.Updater.autoCheck()
+        if (savedInstanceState == null) vm.onShortcut(intent?.action)
         setContent {
             ToneDialTheme {
                 var granted by remember { mutableStateOf(hasAudioPermission()) }
@@ -91,6 +92,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        vm.onShortcut(intent.action)
     }
 
     override fun onResume() {
