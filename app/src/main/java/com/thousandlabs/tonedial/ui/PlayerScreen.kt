@@ -75,7 +75,6 @@ fun PlayerScreen(vm: MainViewModel, nav: Nav, song: Song, ui: PlayerUi, onClose:
     val favorites by vm.favorites.collectAsStateWithLifecycle()
     val timer by SleepTimer.state.collectAsStateWithLifecycle()
     var showLyrics by remember { mutableStateOf(false) }
-    var showQueue by remember { mutableStateOf(false) }
     var showTimer by remember { mutableStateOf(false) }
 
     Box(
@@ -181,14 +180,13 @@ fun PlayerScreen(vm: MainViewModel, nav: Nav, song: Song, ui: PlayerUi, onClose:
                 horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
                 ToolButton(Icons.Outlined.Subject, "Paroles", active = showLyrics) { showLyrics = !showLyrics }
-                ToolButton(Icons.Outlined.QueueMusic, "File") { showQueue = true }
+                ToolButton(Icons.Outlined.QueueMusic, "File") { nav.go(Screen.Queue(fromPlayer = true)) }
                 ToolButton(Icons.Outlined.Timer, if (timer.active) timerLabel(timer) else "Minuterie", active = timer.active) { showTimer = true }
                 ToolButton(Icons.Outlined.Equalizer, "Égaliseur") { onClose(); nav.go(Screen.Equalizer) }
             }
         }
     }
 
-    if (showQueue) QueueSheet(vm, ui, onDismiss = { showQueue = false })
     if (showTimer) SleepTimerDialog(onDismiss = { showTimer = false })
 }
 
@@ -417,96 +415,6 @@ private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long) {
                 }
             }
         }
-    }
-}
-
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-@Composable
-private fun QueueSheet(vm: MainViewModel, ui: PlayerUi, onDismiss: () -> Unit) {
-    val songMap by vm.songMap.collectAsStateWithLifecycle()
-    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val currentPos = ui.queue.indexOfFirst { it.windowIndex == ui.currentWindow }
-    val state = rememberLazyListState(initialFirstVisibleItemIndex = (currentPos - 1).coerceAtLeast(0))
-    val items = remember { mutableStateListOf<QueueEntry>() }
-    var menuFor by remember { mutableStateOf<Int?>(null) }
-
-    // resynchronise la liste affichée avec la vraie file du lecteur
-    LaunchedEffect(ui.queue) {
-        items.clear()
-        items.addAll(ui.queue)
-    }
-
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = TdColors.Surface) {
-        Row(Modifier.padding(horizontal = 20.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("File d'attente", style = MaterialTheme.typography.titleLarge)
-                Text(
-                    "${pluralTitles(ui.queue.size)}${if (ui.shuffle) " · ordre aléatoire" else ""} · glissez la poignée pour déplacer",
-                    style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim,
-                )
-            }
-            TextButton(onClick = { vm.clearQueue(); onDismiss() }) { Text("Vider") }
-        }
-        ReorderableList(
-            items = items,
-            key = { it.windowIndex },
-            listState = state,
-            modifier = Modifier.fillMaxHeight(0.78f),
-            onMoved = { from, to -> vm.moveInQueue(from, to) },
-        ) { entry, pos, dragging, handle ->
-            val s = songMap[entry.songId]
-            val isCurrent = entry.windowIndex == ui.currentWindow
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .background(if (isCurrent && !dragging) TdColors.AccentDim else androidx.compose.ui.graphics.Color.Transparent)
-                    .combinedClickable(
-                        onClick = { vm.jumpTo(entry.windowIndex) },
-                        onLongClick = { menuFor = pos },
-                    )
-                    .padding(start = 16.dp, top = 4.dp, bottom = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Artwork(s?.art(), size = 42.dp)
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(s?.title ?: "Titre introuvable", maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        color = if (isCurrent || dragging) TdColors.Accent else TdColors.Text)
-                    Text(s?.artist ?: "", maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim)
-                }
-                if (isCurrent) {
-                    Icon(Icons.Outlined.GraphicEq, "En cours", tint = TdColors.Accent, modifier = Modifier.padding(horizontal = 4.dp))
-                } else {
-                    IconButton(onClick = { vm.removeFromQueue(entry.windowIndex) }) {
-                        Icon(Icons.Outlined.Close, "Retirer", tint = TdColors.TextDim, modifier = Modifier.size(20.dp))
-                    }
-                }
-                DragHandleBox(handle, dragging)
-                Box {
-                    DropdownMenu(expanded = menuFor == pos, onDismissRequest = { menuFor = null }, containerColor = TdColors.SurfaceHigh) {
-                        if (!isCurrent) {
-                            DropdownMenuItem(
-                                text = { Text("Lire ensuite") },
-                                leadingIcon = { Icon(Icons.Outlined.PlaylistPlay, null) },
-                                onClick = { menuFor = null; vm.queuePlayNext(pos) },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Retirer de la file") },
-                                leadingIcon = { Icon(Icons.Outlined.RemoveCircleOutline, null) },
-                                onClick = { menuFor = null; vm.removeFromQueue(entry.windowIndex) },
-                            )
-                        }
-                        DropdownMenuItem(
-                            text = { Text("Lire maintenant") },
-                            leadingIcon = { Icon(Icons.Outlined.PlayArrow, null) },
-                            onClick = { menuFor = null; vm.jumpTo(entry.windowIndex) },
-                        )
-                    }
-                }
-            }
-        }
-        Spacer(Modifier.navigationBarsPadding().height(8.dp))
     }
 }
 

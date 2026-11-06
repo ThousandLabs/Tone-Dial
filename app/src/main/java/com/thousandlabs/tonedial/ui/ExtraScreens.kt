@@ -216,7 +216,9 @@ private val guide = listOf(
     GuideSection(
         Icons.Outlined.PlaylistPlay, "File d'attente",
         listOf(
-            "Dans le lecteur, appuyez sur « File » pour voir les titres à venir, dans l'ordre où ils seront joués.",
+            "Dans le lecteur, appuyez sur « File » : la file s'ouvre en plein écran, comme une playlist. Le morceau en cours est en haut, suivi des titres « À suivre » dans l'ordre où ils seront joués. Le bouton retour vous ramène au lecteur.",
+            "En lecture aléatoire, le morceau que vous avez choisi est toujours le premier, et tout le reste est mélangé après lui. Les titres précédents sont repliés dans « Titres précédents », à ouvrir si besoin.",
+            "Depuis la file, vous pouvez activer ou couper l'aléatoire et enregistrer la file comme playlist pour garder un mélange qui vous plaît. Les trois points en haut permettent aussi de vider la file.",
             "Faites glisser la poignée à droite d'un titre pour le monter ou le descendre. Cela fonctionne aussi en lecture aléatoire : l'ordre mélangé est remplacé par le vôtre, l'aléatoire reste activé et la musique ne s'arrête pas.",
             "Restez appuyé sur un titre de la file pour « Lire ensuite » (juste après le morceau en cours), « Lire maintenant » ou « Retirer de la file ». La croix le retire aussi.",
             "« Lire ensuite », depuis le menu d'un titre, place bien le titre juste après le morceau en cours, même en aléatoire.",

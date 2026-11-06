@@ -55,7 +55,10 @@ data class PlayerUi(
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
     val queue: List<QueueEntry> = emptyList(),
     val currentWindow: Int = -1,
-)
+) {
+    /** Position du morceau en cours dans la file (ordre de lecture). */
+    val currentPos: Int get() = queue.indexOfFirst { it.windowIndex == currentWindow }
+}
 
 enum class AutoList(val label: String) {
     FAVORITES("Favoris"),
@@ -281,12 +284,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun play(list: List<Song>, startIndex: Int = 0, shuffle: Boolean = false) {
         val c = controller ?: return
         if (list.isEmpty()) return
-        c.shuffleModeEnabled = shuffle
         val start = if (shuffle) list.indices.random() else startIndex.coerceIn(list.indices)
-        c.setMediaItems(list.map { it.toMediaItem() }, start, 0L)
-        c.prepare()
-        c.play()
+        val p = exo
+        if (p != null) {
+            p.shuffleModeEnabled = shuffle
+            p.setMediaItems(list.map { it.toMediaItem() }, start, 0L)
+            // le morceau de départ est toujours le premier : rien ne s'affiche « avant » lui
+            if (shuffle) applyShuffleOrder(p, startFirstOrder(start, list.size))
+            p.prepare()
+            p.play()
+        } else {
+            c.shuffleModeEnabled = shuffle
+            c.setMediaItems(list.map { it.toMediaItem() }, start, 0L)
+            c.prepare()
+            c.play()
+        }
     }
+
+    /** Ordre mélangé qui commence par `first`. */
+    private fun startFirstOrder(first: Int, size: Int): List<Int> =
+        listOf(first) + (0 until size).filter { it != first }.shuffled()
 
     /** Lecteur du service (même processus) : nécessaire pour personnaliser l'ordre aléatoire. */
     private val exo: androidx.media3.exoplayer.ExoPlayer? get() = PlaybackService.instance?.player
@@ -390,8 +407,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun toggleShuffle() {
+        val p = exo
+        if (p != null) {
+            val on = !p.shuffleModeEnabled
+            p.shuffleModeEnabled = on
+            // en activant l'aléatoire, le morceau en cours devient le premier : la suite est mélangée après lui
+            if (on && p.mediaItemCount > 1) applyShuffleOrder(p, startFirstOrder(p.currentMediaItemIndex, p.mediaItemCount))
+            return
+        }
         val c = controller ?: return
         c.shuffleModeEnabled = !c.shuffleModeEnabled
+    }
+
+    fun saveQueueAsPlaylist(name: String) {
+        val map = songMap.value
+        val songs = _player.value.queue.mapNotNull { map[it.songId] }
+        if (songs.isEmpty()) return
+        createPlaylist(name, songs)
     }
 
     fun cycleRepeat() {

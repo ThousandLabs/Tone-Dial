@@ -33,6 +33,7 @@ sealed interface Screen {
     data class FolderDetail(val path: String) : Screen
     data class PlaylistDetail(val id: Long) : Screen
     data class AddToPlaylist(val id: Long) : Screen
+    data class Queue(val fromPlayer: Boolean) : Screen
     data class AutoDetail(val kind: AutoList) : Screen
     data object Search : Screen
     data object Equalizer : Screen
@@ -73,10 +74,18 @@ fun AppRoot(vm: MainViewModel) {
         }
     }
 
+    // Revenir en arrière ; la file ouverte depuis le lecteur ramène au lecteur
+    fun pop() {
+        if (stack.size <= 1) return
+        val top = stack.last()
+        stack = stack.dropLast(1)
+        if (top is Screen.Queue && top.fromPlayer) flags.playerOpen = true
+    }
+
     val nav = remember {
         Nav(
             go = { s -> selection.clear(); stack = stack + s; flags.playerOpen = false },
-            back = { selection.clear(); if (stack.size > 1) stack = stack.dropLast(1) },
+            back = { selection.clear(); pop() },
             openMenu = { song, pl -> menuFor = song to pl },
             openPlayer = { flags.playerOpen = true },
             selection = selection,
@@ -89,7 +98,7 @@ fun AppRoot(vm: MainViewModel) {
         when {
             flags.playerOpen -> flags.playerOpen = false
             selection.active -> selection.clear()
-            else -> stack = stack.dropLast(1)
+            else -> pop()
         }
     }
     // Sur l'accueil : deux appuis rapprochés pour quitter
@@ -125,6 +134,7 @@ fun AppRoot(vm: MainViewModel) {
                         is Screen.FolderDetail -> FolderDetailScreen(vm, nav, s.path)
                         is Screen.PlaylistDetail -> PlaylistDetailScreen(vm, nav, s.id)
                         is Screen.AddToPlaylist -> PlaylistPickerScreen(vm, nav, s.id)
+                        is Screen.Queue -> QueueScreen(vm, nav)
                         is Screen.AutoDetail -> AutoDetailScreen(vm, nav, s.kind)
                         Screen.Search -> SearchScreen(vm, nav)
                         Screen.Equalizer -> EqualizerScreen(nav)

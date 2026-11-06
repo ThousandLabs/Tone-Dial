@@ -36,6 +36,9 @@ fun <T> ReorderableList(
     modifier: Modifier = Modifier,
     listState: LazyListState = rememberLazyListState(),
     onMoved: (from: Int, to: Int) -> Unit = { _, _ -> },
+    headerCount: Int = 0,
+    header: (androidx.compose.foundation.lazy.LazyListScope.() -> Unit)? = null,
+    contentPadding: PaddingValues = PaddingValues(0.dp),
     row: @Composable (item: T, index: Int, dragging: Boolean, handle: Modifier) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -50,14 +53,15 @@ fun <T> ReorderableList(
         val index = indexOfDragged()
         if (index < 0) return
         val visible = listState.layoutInfo.visibleItemsInfo
-        val current = visible.firstOrNull { it.index == index } ?: return
+        val current = visible.firstOrNull { it.index == index + headerCount } ?: return
         val center = current.offset + offset + current.size / 2f
         val target = visible.firstOrNull {
-            it.index != index && it.index < items.size && center > it.offset && center < it.offset + it.size
+            val li = it.index - headerCount
+            li != index && li in items.indices && center > it.offset && center < it.offset + it.size
         }
         if (target != null) {
             val moved = items.removeAt(index)
-            items.add(target.index, moved)
+            items.add(target.index - headerCount, moved)
             offset += (current.offset - target.offset).toFloat()
         }
         val viewportEnd = listState.layoutInfo.viewportEndOffset
@@ -76,7 +80,8 @@ fun <T> ReorderableList(
         if (start >= 0 && end >= 0 && start != end) onMoved(start, end)
     }
 
-    LazyColumn(state = listState, modifier = modifier) {
+    LazyColumn(state = listState, modifier = modifier, contentPadding = contentPadding) {
+        header?.invoke(this)
         itemsIndexed(items, key = { _, item -> key(item) }) { i, item ->
             val k = key(item)
             val dragging = k == draggingKey
