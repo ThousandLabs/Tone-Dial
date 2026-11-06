@@ -93,6 +93,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        com.thousandlabs.tonedial.update.Updater.onAppResumed(this)
+    }
+
     private fun permissionsToAsk(): Array<String> =
         if (Build.VERSION.SDK_INT >= 33) arrayOf(audioPermission, Manifest.permission.POST_NOTIFICATIONS)
         else arrayOf(audioPermission)

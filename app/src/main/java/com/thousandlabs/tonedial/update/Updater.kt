@@ -33,6 +33,7 @@ object Updater {
     private const val API_URL = "https://api.github.com/repos/ThousandLabs/Tone-Dial/releases/latest"
     private const val AUTO_KEY = "update_auto"
     private const val LAST_CHECK_KEY = "update_last_check_min"
+    private const val DOWNLOADED_KEY = "update_downloaded_code"
 
     sealed interface State {
         data object Idle : State
@@ -41,7 +42,7 @@ object Updater {
         data class Available(val versionCode: Int, val versionName: String, val notes: String, val apkUrl: String) : State
         data class Downloading(val release: Available, val progress: Float) : State
         data class Installing(val release: Available) : State
-        data class Error(val message: String, val release: Available? = null) : State
+        data class Error(val message: String, val release: Available? = null, val retryInstall: Boolean = false) : State
     }
 
     private val _state = MutableStateFlow<State>(State.Idle)
@@ -126,17 +127,25 @@ object Updater {
             else -> return
         }
         val app = context.applicationContext
-        _state.value = State.Downloading(release, 0f)
+        val file = File(app.cacheDir, "update.apk")
+        val alreadyDownloaded = file.exists() && file.length() > 0 &&
+            UserStore.getInt(DOWNLOADED_KEY, -1) == release.versionCode
+        _state.value = if (alreadyDownloaded) State.Installing(release) else State.Downloading(release, 0f)
         scope.launch {
-            val file = File(app.cacheDir, "update.apk")
-            val ok = runCatching {
-                withContext(Dispatchers.IO) { download(release.apkUrl, file) { p -> _state.value = State.Downloading(release, p) } }
-            }.isSuccess
-            if (!ok) {
-                _state.value = State.Error("Le téléchargement a échoué. Vérifiez la connexion.", release)
-                return@launch
+            if (!alreadyDownloaded) {
+                UserStore.putInt(DOWNLOADED_KEY, -1)
+                val ok = runCatching {
+                    withContext(Dispatchers.IO) { download(release.apkUrl, file) { p -> _state.value = State.Downloading(release, p) } }
+                }.isSuccess
+                if (!ok) {
+                    file.delete()
+                    _state.value = State.Error("Le téléchargement a échoué. Vérifiez la connexion.", release)
+                    return@launch
+                }
+                UserStore.putInt(DOWNLOADED_KEY, release.versionCode)
             }
             _state.value = State.Installing(release)
+            installStartedAt = System.currentTimeMillis()
             val installed = runCatching { withContext(Dispatchers.IO) { install(app, file) } }
             installed.onFailure {
                 _state.value = State.Error("L'installation n'a pas pu démarrer.", release)
@@ -180,6 +189,8 @@ object Updater {
 
     private fun install(context: Context, apk: File) {
         val installer = context.packageManager.packageInstaller
+        // abandonne les tentatives précédentes restées en suspens
+        installer.mySessions.forEach { runCatching { installer.abandonSession(it.sessionId) } }
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
             setAppPackageName(context.packageName)
             if (Build.VERSION.SDK_INT >= 31) {
@@ -200,6 +211,29 @@ object Updater {
         }
     }
 
+    private var installStartedAt = 0L
+
+    /**
+     * Appelé quand l'utilisateur revient dans l'appli. Si l'installation était en attente,
+     * la fenêtre d'Android a été fermée sans confirmation : on propose de relancer.
+     */
+    fun onAppResumed(context: Context) {
+        cleanupIfInstalled(context)
+        val s = _state.value
+        if (s is State.Installing && System.currentTimeMillis() - installStartedAt > 1500) {
+            _state.value = State.Error("L'installation n'a pas été confirmée.", s.release, retryInstall = true)
+        }
+    }
+
+    /** Supprime l'ancien fichier téléchargé une fois la mise à jour installée. */
+    private fun cleanupIfInstalled(context: Context) {
+        val code = UserStore.getInt(DOWNLOADED_KEY, -1)
+        if (code in 0..BuildConfig.VERSION_CODE) {
+            runCatching { File(context.cacheDir, "update.apk").delete() }
+            UserStore.putInt(DOWNLOADED_KEY, -1)
+        }
+    }
+
     internal fun onInstallFailed(message: String) {
         val release = when (val s = _state.value) {
             is State.Installing -> s.release
@@ -207,7 +241,7 @@ object Updater {
             is State.Available -> s
             else -> null
         }
-        _state.value = State.Error(message, release)
+        _state.value = State.Error(message, release, retryInstall = release != null)
     }
 }
 

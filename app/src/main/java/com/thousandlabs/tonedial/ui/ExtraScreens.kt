@@ -261,6 +261,7 @@ private val guide = listOf(
             "Quand une nouvelle version existe, un bandeau apparaît en haut de l'accueil. Appuyez sur « Mettre à jour », puis confirmez dans la fenêtre d'Android : c'est tout.",
             "La première fois, Android demande d'autoriser Tone Dial à installer des applications. Activez l'option, revenez, et la mise à jour démarre toute seule.",
             "Vous pouvez aussi vérifier vous-même dans Menu > À propos et mises à jour. La vérification automatique se désactive au même endroit.",
+            "Si vous quittez l'appli avant de confirmer, rien n'est perdu : en revenant, appuyez sur « Relancer l'installation ». Le fichier déjà téléchargé est réutilisé.",
             "Vos playlists, favoris et réglages sont conservés.",
         ),
     ),
@@ -456,7 +457,9 @@ fun UpdateBanner() {
             }
             when (state) {
                 is Updater.State.Downloading, is Updater.State.Installing -> Unit
-                is Updater.State.Error -> TextButton(onClick = launch) { Text("Réessayer") }
+                is Updater.State.Error -> TextButton(onClick = launch) {
+                    Text(if ((state as Updater.State.Error).retryInstall) "Relancer l'installation" else "Réessayer")
+                }
                 else -> {
                     TextButton(onClick = launch) { Text("Mettre à jour") }
                     IconButton(onClick = { Updater.dismissBanner() }) {
@@ -492,7 +495,7 @@ fun UpdateSection() {
         is Updater.State.Available -> "Installer la version ${s.versionName}" to "Téléchargement et installation en deux appuis"
         is Updater.State.Downloading -> "Téléchargement… ${(s.progress * 100).toInt()} %" to "Version ${s.release.versionName}"
         is Updater.State.Installing -> "Installation…" to "Confirmez dans la fenêtre d'Android"
-        is Updater.State.Error -> "Réessayer" to s.message
+        is Updater.State.Error -> (if (s.retryInstall) "Relancer l'installation" else "Réessayer") to s.message
     }
     ListItemRow(
         Icons.Outlined.SystemUpdate, label, subtitle = subtitle, tint = TdColors.Accent,
