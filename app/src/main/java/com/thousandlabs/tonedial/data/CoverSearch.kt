@@ -228,15 +228,26 @@ object CoverSearch {
         val name = searchWords(animeName).joinToString(" ")
         if (name.isBlank()) return null
         val type = if (kind.lowercase().startsWith("o")) "OP" else "ED"
-        val url = "https://api.animethemes.moe/search?q=" + enc(name) +
-            "&fields[search]=anime&include[anime]=images,animethemes.song.artists"
-        val json = getJson(url) ?: return null
-        val animeList = runCatching { JSONObject(json).getJSONObject("search").getJSONArray("anime") }.getOrNull() ?: return null
-        if (animeList.length() == 0) return null
-        val anime = animeList.getJSONObject(0)
+        // plusieurs formes d'adresse selon la version de l'API AnimeThemes
+        val urls = listOf(
+            "https://api.animethemes.moe/search?q=${enc(name)}&fields[search]=anime&include[anime]=images,animethemes.song.artists",
+            "https://api.animethemes.moe/anime?q=${enc(name)}&include=images,animethemes.song.artists&page[size]=3",
+            "https://api.animethemes.moe/api/anime?filter[search]=${enc(name)}&include=images,animethemes.song.artists,animethemes.song.performances.artist&page[size]=3",
+        )
+        var anime: JSONObject? = null
+        for (u in urls) {
+            val json = getJson(u) ?: continue
+            val root = runCatching { JSONObject(json) }.getOrNull() ?: continue
+            val list = root.optJSONObject("search")?.optJSONArray("anime") ?: root.optJSONArray("anime")
+            if (list != null && list.length() > 0) {
+                anime = list.getJSONObject(0)
+                break
+            }
+        }
+        val animeObj = anime ?: return null
 
         var poster: String? = null
-        anime.optJSONArray("images")?.let { imgs ->
+        animeObj.optJSONArray("images")?.let { imgs ->
             for (i in 0 until imgs.length()) {
                 val im = imgs.getJSONObject(i)
                 if (im.optString("facet").contains("Large", true)) poster = im.optString("link")
@@ -246,7 +257,7 @@ object CoverSearch {
 
         var songTitle: String? = null
         var songArtist: String? = null
-        anime.optJSONArray("animethemes")?.let { themes ->
+        animeObj.optJSONArray("animethemes")?.let { themes ->
             for (i in 0 until themes.length()) {
                 val t = themes.getJSONObject(i)
                 val seq = t.optInt("sequence", 1).let { if (it == 0) 1 else it }
@@ -254,6 +265,9 @@ object CoverSearch {
                     val s = t.optJSONObject("song")
                     songTitle = s?.optString("title")
                     songArtist = s?.optJSONArray("artists")?.let { a -> if (a.length() > 0) a.getJSONObject(0).optString("name") else null }
+                        ?: s?.optJSONArray("performances")?.let { a ->
+                            if (a.length() > 0) a.getJSONObject(0).optJSONObject("artist")?.optString("name") else null
+                        }
                     break
                 }
             }
