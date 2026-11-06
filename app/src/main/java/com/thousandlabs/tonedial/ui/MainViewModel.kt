@@ -229,6 +229,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun hasCustomCover(song: Song) = com.thousandlabs.tonedial.data.Covers.hasCustom(song.id)
 
+    fun setPlaylistImage(p: Playlist, image: Uri) {
+        viewModelScope.launch {
+            val ok = com.thousandlabs.tonedial.data.Covers.setPlaylistImage(ctx, p.id, image)
+            _messages.tryEmit(if (ok) "Image de la playlist modifiée" else "Impossible de lire cette image")
+        }
+    }
+
+    fun removePlaylistImage(p: Playlist) {
+        com.thousandlabs.tonedial.data.Covers.removePlaylistImage(p.id)
+        _messages.tryEmit("Image de la playlist retirée")
+    }
+
+    /** Image d'une playlist : celle choisie, sinon la pochette de son premier titre. */
+    fun playlistArt(p: Playlist): Any? =
+        com.thousandlabs.tonedial.data.Covers.playlistFile(p.id) ?: playlistSongs(p).firstOrNull()?.let {
+            com.thousandlabs.tonedial.data.SongArt(it.id, it.albumId, com.thousandlabs.tonedial.data.Covers.stamp(it.id, it.albumId))
+        }
+
     // ---------------- Suppression de fichiers ----------------
     /**
      * Prépare la suppression. Renvoie la demande de confirmation d'Android à afficher,
@@ -705,8 +723,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val l = LyricsLoader.load(ctx, song)
             if (lyricsFor == song.id) _lyrics.value = l
             _lyricsLoading.value = false
+            // recherche automatique en ligne dès le début du morceau, sans ouvrir les paroles
+            if ((l == null || l.lines.isEmpty()) && lyricsFor == song.id && com.thousandlabs.tonedial.data.LyricsBatch.autoEnabled()) {
+                searchLyricsOnline(song, auto = true)
+            }
         }
     }
+
+    val lyricsBatch = com.thousandlabs.tonedial.data.LyricsBatch.progress
+    fun startLyricsBatch() = com.thousandlabs.tonedial.data.LyricsBatch.start(ctx, _songs.value)
+    fun stopLyricsBatch() = com.thousandlabs.tonedial.data.LyricsBatch.stop()
 
     private val _lyricsSearching = MutableStateFlow(false)
     val lyricsSearching: StateFlow<Boolean> = _lyricsSearching.asStateFlow()

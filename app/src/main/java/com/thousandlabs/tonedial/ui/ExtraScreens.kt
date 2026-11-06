@@ -165,6 +165,7 @@ private val guide = listOf(
         Icons.Outlined.LibraryMusic, "Votre bibliothèque",
         listOf(
             "Tone Dial trouve automatiquement toutes les musiques enregistrées sur le téléphone : rien à importer.",
+            "Pour changer l'ordre des onglets (par exemple mettre Playlists juste après Albums) : restez appuyé sur un onglet, ou Menu > Réorganiser les onglets, puis faites glisser la poignée. Le premier onglet est celui qui s'ouvre au lancement.",
             "Les onglets Titres, Albums, Artistes, Dossiers et Playlists permettent de parcourir la musique de plusieurs façons. Glissez de gauche à droite pour passer d'un onglet à l'autre.",
             "Après avoir téléchargé de nouvelles musiques, ouvrez le menu (trois points en haut) puis « Actualiser la bibliothèque ».",
             "Les notes vocales et sons courts sont masqués. Réglez la durée minimale dans Menu > Réglages.",
@@ -251,7 +252,7 @@ private val guide = listOf(
             "Pour trier une playlist, appuyez sur l'icône de tri en haut : ordre personnalisé, ajoutés récemment en premier, ajoutés en premier, titre (A → Z), artiste, album, téléchargés récemment ou durée. Chaque playlist garde son tri, et la lecture suit l'ordre affiché.",
             "Pour placer les titres où vous voulez : icône de tri > « Réorganiser à la main ». Faites glisser la poignée à droite d'un titre, puis appuyez sur « Terminé ». La playlist passe alors en ordre personnalisé.",
             "Les Favoris ont aussi leur bouton de tri.",
-            "Dans une playlist, les trois points en haut permettent aussi de la renommer ou de la supprimer. Vos fichiers de musique ne sont jamais supprimés.",
+            "Dans une playlist, les trois points en haut permettent aussi de la renommer, de changer son image (photo de la galerie) ou de la supprimer. Vos fichiers de musique ne sont jamais supprimés.",
         ),
     ),
     GuideSection(
@@ -259,7 +260,8 @@ private val guide = listOf(
         listOf(
             "Dans le lecteur, appuyez sur « Paroles ».",
             "Tone Dial lit d'abord les paroles intégrées aux fichiers MP3 et FLAC, ou un fichier .lrc portant le même nom que la musique, dans le même dossier.",
-            "S'il n'y en a pas, l'appli les cherche automatiquement sur LRCLIB, une base de paroles libre et gratuite. Les paroles trouvées sont enregistrées sur le téléphone : la fois suivante, plus besoin de connexion.",
+            "S'il n'y en a pas, l'appli les cherche automatiquement sur LRCLIB, une base de paroles libre et gratuite, dès que le morceau commence : elles sont prêtes quand vous ouvrez l'onglet Paroles. Les paroles trouvées sont enregistrées sur le téléphone : la fois suivante, plus besoin de connexion.",
+            "Pour tout compléter d'un coup : Menu > Réglages > « Rechercher toutes les paroles manquantes ». La recherche automatique se désactive au même endroit.",
             "Si rien n'est trouvé : « Google » ouvre la recherche dans le navigateur. Copiez les paroles, revenez dans Tone Dial et appuyez sur « Coller ». « Saisir » permet aussi de les taper ou de les modifier.",
             "Les paroles synchronisées (minutages comme [01:23.45]) défilent en rythme avec la musique, et un appui sur une ligne y fait sauter la lecture.",
             "Sous les paroles, « Options » permet d'en chercher d'autres, de les modifier ou de les supprimer.",

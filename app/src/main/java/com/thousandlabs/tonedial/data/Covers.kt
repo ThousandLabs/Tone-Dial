@@ -67,6 +67,31 @@ object Covers {
 
     fun hasCustom(songId: Long): Boolean = stamps.containsKey(songName(songId))
 
+    // ---------- Images des playlists ----------
+    private fun playlistName(id: Long) = "playlist_$id.jpg"
+
+    /** Image choisie pour une playlist, ou null. */
+    fun playlistFile(id: Long): File? {
+        if (!::dir.isInitialized || !stamps.containsKey(playlistName(id))) return null
+        return File(dir, playlistName(id)).takeIf { it.exists() }
+    }
+
+    suspend fun setPlaylistImage(context: Context, id: Long, image: Uri): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            val bytes = context.contentResolver.openInputStream(image)?.use { it.readBytes() } ?: return@runCatching false
+            val bmp = ArtBytes.decode(bytes, 800) ?: return@runCatching false
+            save(playlistName(id), bmp)
+            true
+        }.getOrDefault(false)
+    }
+
+    fun removePlaylistImage(id: Long) {
+        if (!::dir.isInitialized) return
+        File(dir, playlistName(id)).delete()
+        stamps.remove(playlistName(id))
+        _version.value++
+    }
+
     private fun save(name: String, bmp: Bitmap) {
         val f = File(dir, name)
         f.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 90, it) }

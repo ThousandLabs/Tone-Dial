@@ -57,13 +57,13 @@ class ArtBitmapLoader(context: Context) : BitmapLoader {
         return bytes?.let { ArtBytes.decode(it, 512) } ?: logoBitmap()
     }
 
-    /** Logo Tone Dial (cadran doré sur fond sombre), dessiné une seule fois. */
+    /** Logo Tone Dial (cadran sur fond bleu nuit), dessiné une seule fois. */
     private fun logoBitmap(): Bitmap {
         logo?.let { return it }
         val size = 512
         val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
-        canvas.drawColor(ContextCompat.getColor(app, R.color.td_background))
+        canvas.drawColor(ContextCompat.getColor(app, R.color.icon_background))
         ContextCompat.getDrawable(app, R.drawable.ic_launcher_foreground)?.let { d ->
             // le dessin du logo occupe le centre de sa zone : on l'agrandit pour remplir l'image
             val pad = -size / 6

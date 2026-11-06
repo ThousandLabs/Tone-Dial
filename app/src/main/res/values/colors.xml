@@ -5,4 +5,6 @@
     <color name="td_accent">#FFF2B544</color>
     <color name="td_text">#FFEDEFF4</color>
     <color name="td_text_dim">#FF9AA1B2</color>
+    <!-- famille d'icônes Thousand Labs -->
+    <color name="icon_background">#FF16233F</color>
 </resources>

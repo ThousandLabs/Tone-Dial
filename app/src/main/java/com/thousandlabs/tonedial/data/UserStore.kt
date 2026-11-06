@@ -217,6 +217,20 @@ object UserStore {
         prefs.edit().putInt("min_duration_sec", sec).apply()
     }
 
+    // ---------- Ordre des onglets de l'accueil ----------
+    private val _tabOrder = MutableStateFlow<List<String>>(emptyList())
+    val tabOrder: StateFlow<List<String>> = _tabOrder.asStateFlow()
+
+    fun loadTabOrder(defaults: List<String>) {
+        val saved = prefs.getString("tab_order", null)?.split(',')?.filter { it in defaults } ?: emptyList()
+        _tabOrder.value = saved + defaults.filterNot { it in saved }
+    }
+
+    fun setTabOrder(order: List<String>) {
+        _tabOrder.value = order
+        prefs.edit().putString("tab_order", order.joinToString(",")).apply()
+    }
+
     fun getString(key: String): String? = prefs.getString(key, null)
     fun putString(key: String, value: String?) {
         if (value == null) prefs.edit().remove(key).apply() else prefs.edit().putString(key, value).apply()

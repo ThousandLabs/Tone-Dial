@@ -66,7 +66,7 @@ import com.thousandlabs.tonedial.data.formatDuration
 /** Pochette avec une icône de remplacement si le morceau n'a pas d'image. */
 @Composable
 fun Artwork(
-    art: SongArt?,
+    art: Any?,
     modifier: Modifier = Modifier,
     size: Dp = 48.dp,
     corner: Dp = 8.dp,
@@ -82,7 +82,9 @@ fun Artwork(
         Icon(placeholder, null, tint = TdColors.TextDim, modifier = Modifier.size(size * 0.45f))
         val coverVersion by com.thousandlabs.tonedial.data.Covers.version.collectAsState()
         if (art != null) {
-            val model = remember(art, coverVersion) { art.copy(stamp = com.thousandlabs.tonedial.data.Covers.stamp(art.songId, art.albumId)) }
+            val model = remember(art, coverVersion) {
+                if (art is SongArt) art.copy(stamp = com.thousandlabs.tonedial.data.Covers.stamp(art.songId, art.albumId)) else art
+            }
             AsyncImage(
                 model = model,
                 contentDescription = null,
@@ -94,7 +96,7 @@ fun Artwork(
 }
 
 @Composable
-fun ArtworkFill(art: SongArt?, modifier: Modifier = Modifier, corner: Dp = 12.dp, placeholder: ImageVector = Icons.Outlined.MusicNote) {
+fun ArtworkFill(art: Any?, modifier: Modifier = Modifier, corner: Dp = 12.dp, placeholder: ImageVector = Icons.Outlined.MusicNote) {
     Box(
         modifier
             .clip(RoundedCornerShape(corner))
@@ -104,7 +106,9 @@ fun ArtworkFill(art: SongArt?, modifier: Modifier = Modifier, corner: Dp = 12.dp
         Icon(placeholder, null, tint = TdColors.TextDim, modifier = Modifier.size(40.dp))
         val coverVersion by com.thousandlabs.tonedial.data.Covers.version.collectAsState()
         if (art != null) {
-            val model = remember(art, coverVersion) { art.copy(stamp = com.thousandlabs.tonedial.data.Covers.stamp(art.songId, art.albumId)) }
+            val model = remember(art, coverVersion) {
+                if (art is SongArt) art.copy(stamp = com.thousandlabs.tonedial.data.Covers.stamp(art.songId, art.albumId)) else art
+            }
             AsyncImage(model = model, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         }
     }

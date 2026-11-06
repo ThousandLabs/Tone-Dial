@@ -5,6 +5,7 @@ package com.thousandlabs.tonedial.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -38,10 +39,31 @@ import com.thousandlabs.tonedial.data.PlaylistSort
 import com.thousandlabs.tonedial.data.art
 import kotlinx.coroutines.launch
 
-private val tabs = listOf("Titres", "Albums", "Artistes", "Dossiers", "Playlists")
+/** Onglets de l'accueil, dans l'ordre par défaut. L'utilisateur peut les réorganiser. */
+enum class HomeTab(val label: String) {
+    SONGS("Titres"),
+    ALBUMS("Albums"),
+    ARTISTS("Artistes"),
+    FOLDERS("Dossiers"),
+    PLAYLISTS("Playlists"),
+}
 
 @Composable
+fun rememberTabOrder(): List<HomeTab> {
+    LaunchedEffect(Unit) {
+        if (com.thousandlabs.tonedial.data.UserStore.tabOrder.value.isEmpty()) {
+            com.thousandlabs.tonedial.data.UserStore.loadTabOrder(HomeTab.entries.map { it.name })
+        }
+    }
+    val names by com.thousandlabs.tonedial.data.UserStore.tabOrder.collectAsStateWithLifecycle()
+    return names.mapNotNull { n -> HomeTab.entries.firstOrNull { it.name == n } }.ifEmpty { HomeTab.entries }
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
 fun HomeScreen(vm: MainViewModel, nav: Nav) {
+    val tabs = rememberTabOrder()
+    var reorderTabs by remember { mutableStateOf(false) }
     val pager = rememberPagerState(pageCount = { tabs.size })
     val scope = rememberCoroutineScope()
     var menu by remember { mutableStateOf(false) }
@@ -79,6 +101,11 @@ fun HomeScreen(vm: MainViewModel, nav: Nav) {
                             onClick = { menu = false; nav.go(Screen.Stats) },
                         )
                         DropdownMenuItem(
+                            text = { Text("Réorganiser les onglets") },
+                            leadingIcon = { Icon(Icons.Outlined.DragHandle, null) },
+                            onClick = { menu = false; reorderTabs = true },
+                        )
+                        DropdownMenuItem(
                             text = { Text("Réglages") },
                             leadingIcon = { Icon(Icons.Outlined.Settings, null) },
                             onClick = { menu = false; nav.go(Screen.Settings) },
@@ -108,11 +135,17 @@ fun HomeScreen(vm: MainViewModel, nav: Nav) {
             edgePadding = 12.dp,
             divider = { HorizontalDivider(color = TdColors.Divider) },
         ) {
-            tabs.forEachIndexed { i, label ->
+            tabs.forEachIndexed { i, tab ->
                 Tab(
                     selected = pager.currentPage == i,
                     onClick = { scope.launch { pager.animateScrollToPage(i) } },
-                    text = { Text(label) },
+                    text = {
+                        // appui long sur un onglet : réorganiser les onglets
+                        Text(tab.label, modifier = Modifier.combinedClickable(
+                            onClick = { scope.launch { pager.animateScrollToPage(i) } },
+                            onLongClick = { reorderTabs = true },
+                        ))
+                    },
                     selectedContentColor = TdColors.Accent,
                     unselectedContentColor = TdColors.TextDim,
                 )
@@ -120,13 +153,23 @@ fun HomeScreen(vm: MainViewModel, nav: Nav) {
         }
 
         HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
-            when (page) {
-                0 -> SongsTab(vm, nav)
-                1 -> AlbumsTab(vm, nav)
-                2 -> ArtistsTab(vm, nav)
-                3 -> FoldersTab(vm, nav)
-                else -> PlaylistsTab(vm, nav)
+            when (tabs.getOrElse(page) { HomeTab.SONGS }) {
+                HomeTab.SONGS -> SongsTab(vm, nav)
+                HomeTab.ALBUMS -> AlbumsTab(vm, nav)
+                HomeTab.ARTISTS -> ArtistsTab(vm, nav)
+                HomeTab.FOLDERS -> FoldersTab(vm, nav)
+                HomeTab.PLAYLISTS -> PlaylistsTab(vm, nav)
             }
+        }
+    }
+
+    if (reorderTabs) {
+        TabOrderDialog(tabs, onDismiss = { reorderTabs = false }) { newOrder ->
+            val current = tabs.getOrNull(pager.currentPage)
+            com.thousandlabs.tonedial.data.UserStore.setTabOrder(newOrder.map { it.name })
+            reorderTabs = false
+            val target = newOrder.indexOf(current).coerceAtLeast(0)
+            scope.launch { pager.scrollToPage(target) }
         }
     }
 }
@@ -317,10 +360,10 @@ private fun PlaylistsTab(vm: MainViewModel, nav: Nav) {
             }
         }
         items(playlists, key = { it.id }) { p ->
-            val first = p.songIds.firstOrNull()
-            val song = first?.let { vm.songMap.value[it] }
+            val coverVersion by com.thousandlabs.tonedial.data.Covers.version.collectAsStateWithLifecycle()
+            val art = remember(p, coverVersion) { vm.playlistArt(p) }
             CollectionRow(
-                art = song?.art(),
+                art = art,
                 placeholder = Icons.Outlined.QueueMusic,
                 title = p.name,
                 subtitle = pluralTitles(p.songIds.size),
@@ -342,7 +385,7 @@ fun SectionLabel(text: String) {
 
 @Composable
 fun CollectionRow(
-    art: SongArt?,
+    art: Any?,
     placeholder: ImageVector,
     title: String,
     subtitle: String,
@@ -376,7 +419,7 @@ fun SongCollectionScreen(
     nav: Nav,
     title: String,
     subtitle: String,
-    art: SongArt?,
+    art: Any?,
     placeholder: ImageVector,
     songs: List<Song>,
     numbered: Boolean = false,
@@ -572,6 +615,12 @@ fun PlaylistDetailScreen(vm: MainViewModel, nav: Nav, id: Long) {
     var renaming by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var reordering by remember { mutableStateOf(false) }
+    val coverVersion by com.thousandlabs.tonedial.data.Covers.version.collectAsStateWithLifecycle()
+    val playlistArt = remember(playlist, songs, coverVersion) { vm.playlistArt(playlist) }
+    val hasImage = remember(playlist, coverVersion) { com.thousandlabs.tonedial.data.Covers.playlistFile(playlist.id) != null }
+    val imagePicker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()
+    ) { uri -> if (uri != null) vm.setPlaylistImage(playlist, uri) }
 
     if (reordering) {
         ReorderScreen(
@@ -607,7 +656,7 @@ fun PlaylistDetailScreen(vm: MainViewModel, nav: Nav, id: Long) {
     SongCollectionScreen(
         vm, nav, playlist.name,
         "${pluralTitles(songs.size)} · ${totalDuration(songs)}\nTri : ${sort.label}",
-        songs.firstOrNull()?.art(), Icons.Outlined.QueueMusic, songs,
+        playlistArt, Icons.Outlined.QueueMusic, songs,
         playlist = playlist,
         emptyText = "Playlist vide. Appuyez sur « Ajouter des titres » pour la remplir.",
         actions = {
@@ -631,6 +680,19 @@ fun PlaylistDetailScreen(vm: MainViewModel, nav: Nav, id: Long) {
                         enabled = songs.size > 1, onClick = { menu = false; reordering = true })
                     DropdownMenuItem(text = { Text("Renommer") }, leadingIcon = { Icon(Icons.Outlined.Edit, null) },
                         onClick = { menu = false; renaming = true })
+                    DropdownMenuItem(text = { Text("Changer l'image") }, leadingIcon = { Icon(Icons.Outlined.Image, null) },
+                        onClick = {
+                            menu = false
+                            imagePicker.launch(
+                                androidx.activity.result.PickVisualMediaRequest(
+                                    androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly
+                                )
+                            )
+                        })
+                    if (hasImage) {
+                        DropdownMenuItem(text = { Text("Retirer l'image") }, leadingIcon = { Icon(Icons.Outlined.HideImage, null) },
+                            onClick = { menu = false; vm.removePlaylistImage(playlist) })
+                    }
                     DropdownMenuItem(text = { Text("Supprimer") }, leadingIcon = { Icon(Icons.Outlined.Delete, null) },
                         onClick = { menu = false; confirmDelete = true })
                 }
@@ -801,6 +863,19 @@ fun SettingsScreen(vm: MainViewModel, nav: Nav) {
                         colors = SwitchDefaults.colors(checkedTrackColor = TdColors.Accent, checkedThumbColor = TdColors.Background),
                     )
                 }
+                val tabOrder = rememberTabOrder()
+                var editTabs by remember { mutableStateOf(false) }
+                ListItemRow(
+                    Icons.Outlined.DragHandle, "Ordre des onglets",
+                    subtitle = tabOrder.joinToString(" · ") { it.label },
+                    onClick = { editTabs = true },
+                )
+                if (editTabs) {
+                    TabOrderDialog(tabOrder, onDismiss = { editTabs = false }) {
+                        com.thousandlabs.tonedial.data.UserStore.setTabOrder(it.map { t -> t.name })
+                        editTabs = false
+                    }
+                }
                 val excluded by vm.excludedFolders.collectAsStateWithLifecycle()
                 ListItemRow(
                     Icons.Outlined.FolderOff, "Dossiers affichés",
@@ -809,6 +884,8 @@ fun SettingsScreen(vm: MainViewModel, nav: Nav) {
                 )
                 SectionLabel("Pochettes")
                 CoverSettings(vm, nav)
+                SectionLabel("Paroles")
+                LyricsSettings(vm)
                 SectionLabel("Son")
                 ListItemRow(Icons.Outlined.Equalizer, "Égaliseur et basses", onClick = { nav.go(Screen.Equalizer) })
                 SectionLabel("Sauvegarde")
@@ -1023,4 +1100,95 @@ private fun BackupSettings(vm: MainViewModel) {
         style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim,
         modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
     )
+}
+
+
+/** Réorganisation des onglets de l'accueil par glisser-déposer. */
+@Composable
+fun TabOrderDialog(current: List<HomeTab>, onDismiss: () -> Unit, onSave: (List<HomeTab>) -> Unit) {
+    val items = remember { mutableStateListOf<HomeTab>().apply { addAll(current) } }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Ordre des onglets") },
+        text = {
+            Column {
+                Text(
+                    "Faites glisser la poignée pour changer l'ordre. Le premier onglet est celui qui s'ouvre au lancement.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TdColors.TextDim,
+                )
+                Spacer(Modifier.height(8.dp))
+                ReorderableList(items, key = { it.name }, modifier = Modifier.height(300.dp)) { tab, i, dragging, handle ->
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("${i + 1}", modifier = Modifier.width(26.dp), color = TdColors.TextDim, style = MaterialTheme.typography.bodySmall)
+                        Icon(
+                            when (tab) {
+                                HomeTab.SONGS -> Icons.Outlined.MusicNote
+                                HomeTab.ALBUMS -> Icons.Outlined.Album
+                                HomeTab.ARTISTS -> Icons.Outlined.Person
+                                HomeTab.FOLDERS -> Icons.Outlined.Folder
+                                HomeTab.PLAYLISTS -> Icons.Outlined.QueueMusic
+                            },
+                            null,
+                            tint = if (dragging) TdColors.Accent else TdColors.Text,
+                        )
+                        Spacer(Modifier.width(14.dp))
+                        Text(tab.label, modifier = Modifier.weight(1f), color = if (dragging) TdColors.Accent else TdColors.Text)
+                        DragHandleBox(handle, dragging)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSave(items.toList()) }) { Text("Enregistrer") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Annuler") } },
+        containerColor = TdColors.Surface,
+    )
+}
+
+
+@Composable
+private fun LyricsSettings(vm: MainViewModel) {
+    val progress by vm.lyricsBatch.collectAsStateWithLifecycle()
+    var auto by remember { mutableStateOf(com.thousandlabs.tonedial.data.LyricsBatch.autoEnabled()) }
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Outlined.Subject, null, tint = TdColors.Text, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(18.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Paroles automatiques", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "Dès qu'un titre sans paroles commence, l'appli les cherche en ligne et les garde sur le téléphone. Elles sont prêtes quand vous ouvrez l'onglet Paroles.",
+                style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim,
+            )
+        }
+        Switch(
+            checked = auto,
+            onCheckedChange = { auto = it; com.thousandlabs.tonedial.data.LyricsBatch.setAutoEnabled(it) },
+            colors = SwitchDefaults.colors(checkedTrackColor = TdColors.Accent, checkedThumbColor = TdColors.Background),
+        )
+    }
+    if (progress.running) {
+        Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+            Text("Recherche des paroles : ${progress.done} / ${progress.total} · ${progress.found} trouvée(s)", style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(6.dp))
+            LinearProgressIndicator(
+                progress = { if (progress.total > 0) progress.done.toFloat() / progress.total else 0f },
+                modifier = Modifier.fillMaxWidth(),
+                color = TdColors.Accent,
+                trackColor = TdColors.Divider,
+            )
+            TextButton(onClick = { vm.stopLyricsBatch() }) { Text("Arrêter") }
+        }
+    } else {
+        ListItemRow(
+            Icons.Outlined.Search, "Rechercher toutes les paroles manquantes",
+            subtitle = if (progress.finished) "Terminé : ${progress.found} parole(s) ajoutée(s). Appuyez pour relancer." else "Pour tous les titres sans paroles. Connexion Internet nécessaire.",
+            onClick = { vm.startLyricsBatch() },
+        )
+    }
 }

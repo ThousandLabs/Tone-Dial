@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icône Tone Dial, famille Thousand Labs : cadran turquoise et point doré sur fond bleu nuit.
+     Formes épaisses pour un rendu net, contenu dans la zone visible (rayon 33 autour du centre). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M54,31a25,25 0,1 1,0 50a25,25 0,1 1,0 -50z" android:strokeWidth="8" android:strokeColor="#FFFFFF" android:fillColor="#00000000" />
+    <path android:pathData="M43.5,51.5 L43.5,60.5 M54,45.5 L54,66.5 M64.5,50 L64.5,62" android:strokeWidth="6.5" android:strokeLineCap="round" android:strokeColor="#FFFFFF" />
+    <path android:pathData="M54,24.5a6.5,6.5 0,1 1,0 13a6.5,6.5 0,1 1,0 -13z" android:fillColor="#FFFFFF" />
+</vector>

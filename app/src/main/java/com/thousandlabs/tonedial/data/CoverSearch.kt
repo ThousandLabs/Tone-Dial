@@ -139,10 +139,13 @@ object CoverSearch {
             val durationClose = diff in 0..4
             val durationFar = diff > 25 && !ignoreDuration
 
-            val accepted = !durationFar && (
+            // Un clip vidéo dure souvent plus longtemps que le titre officiel (intro, fin, sketch) :
+            // avec le bon artiste et le titre complet, on accepte même si la durée est éloignée.
+            val strong = titleRatio >= 0.99 && artistOk
+            val accepted = strong || (!durationFar && (
                 (titleRatio >= 0.75 && (artistOk || durationClose || ignoreDuration)) ||
                     (titleRatio >= 0.5 && artistOk && (durationClose || ignoreDuration))
-                )
+                ))
             if (!accepted) continue
             val score = titleRatio * 4 + (if (artistOk) 3 else 0) + when {
                 diff in 0..2 -> 3.0

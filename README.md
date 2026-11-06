@@ -7,7 +7,7 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 ## Fonctions
 
 - Détection automatique de toutes les musiques du téléphone (MP3, FLAC, AAC, WAV, OGG…)
-- Onglets Titres, Albums, Artistes, Dossiers et Playlists, plus une recherche
+- Onglets Titres, Albums, Artistes, Dossiers et Playlists, dans l'ordre de votre choix, plus une recherche
 - Lecture en arrière-plan, notification et commandes sur l'écran verrouillé, écouteurs et Bluetooth
 - Lecture aléatoire, répétition (tout / un titre), file d'attente réorganisable par glisser-déposer, même en aléatoire
 - Identification des artistes depuis les noms de fichiers (« Artiste - Titre », feat., ft.) sans modifier les fichiers
@@ -15,7 +15,7 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 - Sélection multiple (appui long) pour ajouter plusieurs titres à une playlist, à la file ou aux favoris en une fois
 - Balayage gauche / droite sur la barre de lecture ou la pochette pour changer de titre
 - Favoris et playlists automatiques : les plus écoutés, écoutés récemment, ajoutés récemment
-- Playlists personnelles (créer, renommer, supprimer, ajouter ou retirer des titres), avec un écran d'ajout qui masque les titres déjà présents, un tri propre à chaque playlist et une réorganisation par glisser-déposer
+- Playlists personnelles (créer, renommer, changer l'image, supprimer, ajouter ou retirer des titres), avec un écran d'ajout qui masque les titres déjà présents, un tri propre à chaque playlist et une réorganisation par glisser-déposer
 - Égaliseur avec préréglages, amplificateur de basses et effet d'espace
 - Paroles : intégrées au fichier (MP3, FLAC), fichier `.lrc`, recherche automatique sur LRCLIB, recherche Google et collage, avec défilement synchronisé
 - Minuterie de sommeil (durée ou fin du titre), avec baisse progressive du son
@@ -30,6 +30,7 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 
 ## Nouveautés
 
+- **1.13** : nouvelle icône nette dans le style Thousand Labs, onglets de l'accueil réorganisables, image personnalisée pour les playlists, paroles recherchées automatiquement dès le début du morceau et recherche groupée, pochettes acceptées pour les clips plus longs que le titre officiel.
 - **1.11** : recherche de pochettes bien plus efficace : Deezer en plus d'iTunes, noms de fichiers abîmés nettoyés, vérification par la durée, openings d'anime (AnimeThemes), faux albums des téléchargeurs détectés, liste des titres sans pochette.
 - **1.10** : dossiers masqués (audios WhatsApp…), correction manuelle titre/artiste/album, pochettes en ligne et depuis la galerie, sauvegarde et restauration, raccourcis d'icône, lecteur à glisser vers le bas, suppression de fichiers, vitesse de lecture, fond du lecteur aux couleurs de la pochette, statistiques d'écoute.
 - **1.9** : file d'attente en une seule liste entièrement réorganisable (y compris au-dessus du morceau en cours), numéros de position, bouton « En cours », vibration au glisser, file mémorisée dans l'ordre choisi (aléatoire compris) au redémarrage.
