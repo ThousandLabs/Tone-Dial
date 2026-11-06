@@ -44,7 +44,7 @@ class PlaybackService : MediaSessionService() {
     private val saveLoop = object : Runnable {
         override fun run() {
             if (::player.isInitialized && player.isPlaying) {
-                UserStore.savePosition(player.currentMediaItemIndex, player.currentPosition)
+                UserStore.savePosition(playPosition(), player.currentPosition)
             }
             handler.postDelayed(this, 10_000)
         }
@@ -78,12 +78,12 @@ class PlaybackService : MediaSessionService() {
                 if (id != null && (player.playWhenReady || reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO)) {
                     UserStore.recordPlay(id)
                 }
-                UserStore.savePosition(player.currentMediaItemIndex, 0L)
+                UserStore.savePosition(playPosition(), 0L)
                 PlayerWidget.updateAll(this@PlaybackService)
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (!isPlaying) UserStore.savePosition(player.currentMediaItemIndex, player.currentPosition)
+                if (!isPlaying) UserStore.savePosition(playPosition(), player.currentPosition)
                 PlayerWidget.updateAll(this@PlaybackService)
             }
 
@@ -94,7 +94,15 @@ class PlaybackService : MediaSessionService() {
             }
 
             override fun onTimelineChanged(timeline: Timeline, reason: Int) {
-                if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) saveQueue()
+                if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) saveQueueNow()
+            }
+
+            override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+                saveQueueNow()
+            }
+
+            override fun onRepeatModeChanged(repeatMode: Int) {
+                UserStore.putInt("queue_repeat", repeatMode)
             }
         })
 
@@ -122,9 +130,33 @@ class PlaybackService : MediaSessionService() {
         PlayerWidget.updateAll(this)
     }
 
-    private fun saveQueue() {
-        val ids = (0 until player.mediaItemCount).mapNotNull { player.getMediaItemAt(it).mediaId.toLongOrNull() }
-        UserStore.saveQueue(ids, player.currentMediaItemIndex, player.currentPosition)
+    /** Ordre de lecture réel (mélangé si l'aléatoire est actif). */
+    private fun playOrder(): List<Int> {
+        val tl = player.currentTimeline
+        if (tl.isEmpty) return emptyList()
+        val shuffle = player.shuffleModeEnabled
+        val out = ArrayList<Int>(tl.windowCount)
+        var i = tl.getFirstWindowIndex(shuffle)
+        while (i != C.INDEX_UNSET && out.size < tl.windowCount) {
+            out += i
+            i = tl.getNextWindowIndex(i, Player.REPEAT_MODE_OFF, shuffle)
+        }
+        return out
+    }
+
+    private fun playPosition(): Int =
+        if (!player.shuffleModeEnabled) player.currentMediaItemIndex
+        else playOrder().indexOf(player.currentMediaItemIndex).coerceAtLeast(0)
+
+    /**
+     * Mémorise la file dans l'ordre affiché (y compris un ordre aléatoire réorganisé à la main),
+     * pour la retrouver telle quelle au prochain lancement.
+     */
+    fun saveQueueNow() {
+        val order = playOrder()
+        val ids = order.mapNotNull { player.getMediaItemAt(it).mediaId.toLongOrNull() }
+        UserStore.saveQueue(ids, order.indexOf(player.currentMediaItemIndex).coerceAtLeast(0), player.currentPosition)
+        UserStore.putBool("queue_shuffle", player.shuffleModeEnabled)
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
@@ -139,7 +171,7 @@ class PlaybackService : MediaSessionService() {
     override fun onDestroy() {
         handler.removeCallbacks(saveLoop)
         if (::player.isInitialized && player.mediaItemCount > 0) {
-            UserStore.savePosition(player.currentMediaItemIndex, player.currentPosition)
+            UserStore.savePosition(playPosition(), player.currentPosition)
         }
         SleepTimer.cancel()
         instance = null

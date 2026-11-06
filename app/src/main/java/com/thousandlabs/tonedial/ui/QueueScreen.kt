@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.thousandlabs.tonedial.data.Song
 import com.thousandlabs.tonedial.data.art
@@ -25,7 +26,7 @@ import com.thousandlabs.tonedial.data.formatDuration
 
 /**
  * File d'attente en écran complet, présentée comme une playlist :
- * morceau en cours, puis « À suivre » réorganisable. Les titres précédents sont repliés en haut.
+ * tous les titres dans l'ordre de lecture, le morceau en cours surligné, tout est déplaçable.
  */
 @Composable
 fun QueueScreen(vm: MainViewModel, nav: Nav) {
@@ -34,23 +35,21 @@ fun QueueScreen(vm: MainViewModel, nav: Nav) {
     var menu by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
-    var showHistory by remember { mutableStateOf(false) }
     var menuFor by remember { mutableStateOf<Int?>(null) }
 
     val curPos = ui.currentPos
-    val history = if (curPos > 0) ui.queue.subList(0, curPos) else emptyList()
     val currentEntry = ui.queue.getOrNull(curPos)
     val current: Song? = currentEntry?.let { songMap[it.songId] }
-    val upcomingEntries = if (curPos >= 0) ui.queue.drop(curPos + 1) else ui.queue
+    val upcomingCount = if (curPos >= 0) ui.queue.size - curPos - 1 else ui.queue.size
 
-    // liste affichée, resynchronisée avec la vraie file du lecteur
-    val upcoming = remember { mutableStateListOf<QueueEntry>() }
-    LaunchedEffect(upcomingEntries) {
-        upcoming.clear()
-        upcoming.addAll(upcomingEntries)
+    // liste affichée (tous les titres dans l'ordre de lecture), resynchronisée avec le lecteur
+    val entries = remember { mutableStateListOf<QueueEntry>() }
+    LaunchedEffect(ui.queue) {
+        entries.clear()
+        entries.addAll(ui.queue)
     }
 
-    val remainingMs = upcomingEntries.sumOf { songMap[it.songId]?.duration ?: 0L } +
+    val remainingMs = (if (curPos >= 0) ui.queue.drop(curPos + 1) else ui.queue).sumOf { songMap[it.songId]?.duration ?: 0L } +
         ((current?.duration ?: 0L) - ui.positionMs).coerceAtLeast(0L)
 
     if (saving) {
@@ -99,128 +98,123 @@ fun QueueScreen(vm: MainViewModel, nav: Nav) {
             return@Column
         }
 
-        val listState = rememberLazyListState()
-        // nombre d'éléments affichés avant la liste réorganisable
-        val headerCount = 1 + (if (history.isNotEmpty()) 1 + (if (showHistory) history.size else 0) else 0) + 1
+        val listState = rememberLazyListState(initialFirstVisibleItemIndex = curPos.coerceAtLeast(0))
+        val scope = rememberCoroutineScope()
+        // le morceau en cours est-il visible à l'écran ?
+        val currentVisible by remember {
+            derivedStateOf {
+                val idx = ui.currentPos + 1
+                listState.layoutInfo.visibleItemsInfo.any { it.index == idx }
+            }
+        }
 
-        ReorderableList(
-            items = upcoming,
-            key = { it.windowIndex },
-            listState = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 16.dp),
-            headerCount = headerCount,
-            onMoved = { from, to -> vm.moveInQueue(from + curPos + 1, to + curPos + 1) },
-            header = {
-                // En-tête façon playlist
-                item(key = "header") {
-                    Column {
-                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Artwork(current?.art(), size = 112.dp, corner = 14.dp, placeholder = Icons.Outlined.QueueMusic)
-                            Spacer(Modifier.width(16.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text("File d'attente", style = MaterialTheme.typography.titleLarge)
-                                Spacer(Modifier.height(4.dp))
-                                Text(
-                                    "${pluralTitles(upcomingEntries.size)} à suivre\n${formatDuration(remainingMs)} restantes" +
-                                        if (ui.shuffle) " · aléatoire" else "",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = TdColors.TextDim,
-                                )
+        Box(Modifier.fillMaxSize()) {
+            ReorderableList(
+                items = entries,
+                key = { it.windowIndex },
+                listState = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 88.dp),
+                headerCount = 1,
+                onMoved = { from, to -> vm.moveInQueue(from, to) },
+                header = {
+                    item(key = "header") {
+                        Column {
+                            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Artwork(current?.art(), size = 112.dp, corner = 14.dp, placeholder = Icons.Outlined.QueueMusic)
+                                Spacer(Modifier.width(16.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text("File d'attente", style = MaterialTheme.typography.titleLarge)
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        "${pluralTitles(ui.queue.size)} · ${upcomingCount} à suivre\n${formatDuration(remainingMs)} restantes" +
+                                            if (ui.shuffle) " · aléatoire" else "",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = TdColors.TextDim,
+                                    )
+                                }
                             }
-                        }
-                        Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            OutlinedButton(onClick = { vm.toggleShuffle() }, modifier = Modifier.weight(1f)) {
-                                Icon(Icons.Outlined.Shuffle, null, modifier = Modifier.size(18.dp),
-                                    tint = if (ui.shuffle) TdColors.Accent else TdColors.Text)
-                                Spacer(Modifier.width(6.dp))
-                                Text(if (ui.shuffle) "Aléatoire activé" else "Aléatoire", color = if (ui.shuffle) TdColors.Accent else TdColors.Text)
+                            Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                OutlinedButton(onClick = { vm.toggleShuffle() }, modifier = Modifier.weight(1f)) {
+                                    Icon(Icons.Outlined.Shuffle, null, modifier = Modifier.size(18.dp),
+                                        tint = if (ui.shuffle) TdColors.Accent else TdColors.Text)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(if (ui.shuffle) "Aléatoire activé" else "Aléatoire", color = if (ui.shuffle) TdColors.Accent else TdColors.Text)
+                                }
+                                OutlinedButton(onClick = { saving = true }, modifier = Modifier.weight(1f)) {
+                                    Icon(Icons.Outlined.PlaylistAdd, null, modifier = Modifier.size(18.dp), tint = TdColors.Text)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("En playlist", color = TdColors.Text)
+                                }
                             }
-                            OutlinedButton(onClick = { saving = true }, modifier = Modifier.weight(1f)) {
-                                Icon(Icons.Outlined.PlaylistAdd, null, modifier = Modifier.size(18.dp), tint = TdColors.Text)
-                                Spacer(Modifier.width(6.dp))
-                                Text("En playlist", color = TdColors.Text)
-                            }
-                        }
-                        Spacer(Modifier.height(8.dp))
-                    }
-                }
-
-                // Titres précédents (repliés)
-                if (history.isNotEmpty()) {
-                    item(key = "history_toggle") {
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable { showHistory = !showHistory }
-                                .padding(horizontal = 20.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(Icons.Outlined.History, null, tint = TdColors.TextDim, modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(12.dp))
-                            Text("Titres précédents (${history.size})", style = MaterialTheme.typography.bodyMedium, color = TdColors.TextDim, modifier = Modifier.weight(1f))
-                            Icon(
-                                if (showHistory) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                                if (showHistory) "Replier" else "Déplier",
-                                tint = TdColors.TextDim,
+                            Text(
+                                "Glissez la poignée pour déplacer un titre. Les titres placés au-dessus du morceau en cours ne seront pas joués ensuite.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TdColors.TextDim,
+                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
                             )
                         }
                     }
-                    if (showHistory) {
-                        history.forEach { e ->
-                            item(key = "h_${e.windowIndex}") {
-                                QueueRow(songMap[e.songId], dim = true, highlighted = false, onClick = { vm.jumpTo(e.windowIndex) })
+                },
+            ) { entry, index, dragging, handle ->
+                val isCurrent = entry.windowIndex == ui.currentWindow
+                QueueRow(
+                    songMap[entry.songId],
+                    number = index + 1,
+                    dim = curPos >= 0 && index < curPos && !dragging,
+                    highlighted = isCurrent || dragging,
+                    onClick = { if (isCurrent) nav.openPlayer() else vm.jumpTo(entry.windowIndex) },
+                    onLongClick = { menuFor = index },
+                    trailing = {
+                        if (isCurrent) {
+                            Icon(Icons.Outlined.GraphicEq, "En cours", tint = TdColors.Accent, modifier = Modifier.padding(horizontal = 14.dp))
+                        } else {
+                            IconButton(onClick = { vm.removeFromQueue(entry.windowIndex) }) {
+                                Icon(Icons.Outlined.Close, "Retirer", tint = TdColors.TextDim, modifier = Modifier.size(20.dp))
                             }
                         }
-                    }
-                }
-
-                // En cours + titre de la section À suivre
-                item(key = "current") {
-                    Column {
-                        SectionLabel("En cours")
-                        if (currentEntry != null) {
-                            QueueRow(current, dim = false, highlighted = true, onClick = { nav.openPlayer() }, trailing = {
-                                Icon(Icons.Outlined.GraphicEq, "En cours", tint = TdColors.Accent, modifier = Modifier.padding(horizontal = 14.dp))
-                            })
+                        DragHandleBox(handle, dragging)
+                        DropdownMenu(expanded = menuFor == index, onDismissRequest = { menuFor = null }, containerColor = TdColors.SurfaceHigh) {
+                            if (!isCurrent) {
+                                DropdownMenuItem(
+                                    text = { Text("Lire ensuite") },
+                                    leadingIcon = { Icon(Icons.Outlined.PlaylistPlay, null) },
+                                    enabled = index != curPos + 1,
+                                    onClick = { menuFor = null; vm.queuePlayNext(index) },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Lire maintenant") },
+                                    leadingIcon = { Icon(Icons.Outlined.PlayArrow, null) },
+                                    onClick = { menuFor = null; vm.jumpTo(entry.windowIndex) },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Retirer de la file") },
+                                    leadingIcon = { Icon(Icons.Outlined.RemoveCircleOutline, null) },
+                                    onClick = { menuFor = null; vm.removeFromQueue(entry.windowIndex) },
+                                )
+                            } else {
+                                DropdownMenuItem(
+                                    text = { Text("Ouvrir le lecteur") },
+                                    leadingIcon = { Icon(Icons.Outlined.PlayArrow, null) },
+                                    onClick = { menuFor = null; nav.openPlayer() },
+                                )
+                            }
                         }
-                        SectionLabel(if (upcomingEntries.isEmpty()) "À suivre : rien" else "À suivre")
-                    }
-                }
-            },
-        ) { entry, index, dragging, handle ->
-            val pos = curPos + 1 + index
-            QueueRow(
-                songMap[entry.songId],
-                dim = false,
-                highlighted = dragging,
-                onClick = { vm.jumpTo(entry.windowIndex) },
-                onLongClick = { menuFor = pos },
-                trailing = {
-                    IconButton(onClick = { vm.removeFromQueue(entry.windowIndex) }) {
-                        Icon(Icons.Outlined.Close, "Retirer", tint = TdColors.TextDim, modifier = Modifier.size(20.dp))
-                    }
-                    DragHandleBox(handle, dragging)
-                    DropdownMenu(expanded = menuFor == pos, onDismissRequest = { menuFor = null }, containerColor = TdColors.SurfaceHigh) {
-                        DropdownMenuItem(
-                            text = { Text("Lire ensuite") },
-                            leadingIcon = { Icon(Icons.Outlined.PlaylistPlay, null) },
-                            enabled = index > 0,
-                            onClick = { menuFor = null; vm.queuePlayNext(pos) },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Lire maintenant") },
-                            leadingIcon = { Icon(Icons.Outlined.PlayArrow, null) },
-                            onClick = { menuFor = null; vm.jumpTo(entry.windowIndex) },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Retirer de la file") },
-                            leadingIcon = { Icon(Icons.Outlined.RemoveCircleOutline, null) },
-                            onClick = { menuFor = null; vm.removeFromQueue(entry.windowIndex) },
-                        )
-                    }
-                },
-            )
+                    },
+                )
+            }
+
+            // bouton pour revenir au morceau en cours
+            if (!currentVisible && curPos >= 0) {
+                ExtendedFloatingActionButton(
+                    onClick = { scope.launch { listState.animateScrollToItem((curPos).coerceAtLeast(0)) } },
+                    containerColor = TdColors.Accent,
+                    contentColor = TdColors.Background,
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+                    icon = { Icon(Icons.Outlined.GraphicEq, null) },
+                    text = { Text("En cours") },
+                )
+            }
         }
     }
 }
@@ -228,6 +222,7 @@ fun QueueScreen(vm: MainViewModel, nav: Nav) {
 @Composable
 private fun QueueRow(
     song: Song?,
+    number: Int,
     dim: Boolean,
     highlighted: Boolean,
     onClick: () -> Unit,
@@ -239,9 +234,16 @@ private fun QueueRow(
             .fillMaxWidth()
             .background(if (highlighted) TdColors.AccentDim else Color.Transparent)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(start = 16.dp, top = 6.dp, bottom = 6.dp),
+            .padding(start = 8.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Text(
+            "$number",
+            modifier = Modifier.width(32.dp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            style = MaterialTheme.typography.bodySmall,
+            color = if (highlighted) TdColors.Accent else TdColors.TextDim,
+        )
         Artwork(song?.art(), size = 46.dp)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {

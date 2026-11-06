@@ -42,6 +42,7 @@ fun <T> ReorderableList(
     row: @Composable (item: T, index: Int, dragging: Boolean, handle: Modifier) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     var draggingKey by remember { mutableStateOf<Any?>(null) }
     var startIndex by remember { mutableIntStateOf(-1) }
     var offset by remember { mutableFloatStateOf(0f) }
@@ -88,6 +89,7 @@ fun <T> ReorderableList(
             val handle = Modifier.pointerInput(k) {
                 detectDragGestures(
                     onDragStart = {
+                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                         draggingKey = k
                         startIndex = items.indexOfFirst { key(it) == k }
                         offset = 0f

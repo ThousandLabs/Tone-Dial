@@ -210,8 +210,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (songs.isEmpty()) return
         val index = songs.indexOfFirst { it.id == savedCurrent }.coerceAtLeast(0)
         val pos = if (songs.getOrNull(index)?.id == savedCurrent) saved.positionMs else 0L
-        c.setMediaItems(songs.map { it.toMediaItem() }, index, pos)
-        c.prepare()
+        val p = exo
+        if (p != null) {
+            // la file est enregistrée dans l'ordre de lecture : on la remet telle quelle
+            p.setMediaItems(songs.map { it.toMediaItem() }, index, pos)
+            if (UserStore.getBool("queue_shuffle", false)) {
+                p.shuffleModeEnabled = true
+                applyShuffleOrder(p, songs.indices.toList())
+            }
+            p.repeatMode = UserStore.getInt("queue_repeat", Player.REPEAT_MODE_OFF)
+            p.prepare()
+        } else {
+            c.setMediaItems(songs.map { it.toMediaItem() }, index, pos)
+            c.prepare()
+        }
     }
 
     private fun startTicker() {
@@ -326,6 +338,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun applyShuffleOrder(p: androidx.media3.exoplayer.ExoPlayer, order: List<Int>) {
         if (order.size != p.mediaItemCount) return
         p.setShuffleOrder(androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder(order.toIntArray(), System.nanoTime()))
+        PlaybackService.instance?.saveQueueNow()
     }
 
     /**
