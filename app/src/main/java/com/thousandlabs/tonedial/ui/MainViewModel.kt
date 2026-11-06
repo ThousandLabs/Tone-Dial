@@ -22,6 +22,8 @@ import com.thousandlabs.tonedial.data.Lyrics
 import com.thousandlabs.tonedial.data.LyricsLoader
 import com.thousandlabs.tonedial.data.MusicRepository
 import com.thousandlabs.tonedial.data.Playlist
+import com.thousandlabs.tonedial.data.PlaylistSort
+import com.thousandlabs.tonedial.data.sortPlaylistSongs
 import com.thousandlabs.tonedial.data.Song
 import com.thousandlabs.tonedial.data.SongSort
 import com.thousandlabs.tonedial.data.UserStore
@@ -138,7 +140,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun autoList(kind: AutoList): List<Song> {
         val map = songMap.value
         return when (kind) {
-            AutoList.FAVORITES -> UserStore.favorites.value.mapNotNull { map[it] }.sortedBy { it.title.lowercase() }
+            AutoList.FAVORITES -> sortPlaylistSongs(
+                UserStore.favorites.value.mapNotNull { map[it] },
+                UserStore.favoritesSort(),
+                UserStore::favoriteAddedAt,
+            )
             AutoList.MOST_PLAYED -> UserStore.playCounts.value.entries
                 .sortedByDescending { it.value }.mapNotNull { map[it.key] }.take(100)
             AutoList.RECENTLY_PLAYED -> UserStore.lastPlayed.value.entries
@@ -151,7 +157,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun playlistSongs(p: Playlist): List<Song> {
         val map = songMap.value
-        return p.songIds.mapNotNull { map[it] }
+        return sortPlaylistSongs(p.songIds.mapNotNull { map[it] }, UserStore.playlistSort(p.id), p::addedAt)
+    }
+
+    val sortVersion = UserStore.sortVersion
+    fun playlistSort(p: Playlist): PlaylistSort = UserStore.playlistSort(p.id)
+    fun setPlaylistSort(p: Playlist, sort: PlaylistSort) = UserStore.setPlaylistSort(p.id, sort)
+    fun favoritesSort(): PlaylistSort = UserStore.favoritesSort()
+    fun setFavoritesSort(sort: PlaylistSort) = UserStore.setFavoritesSort(sort)
+
+    /** Enregistre l'ordre choisi à la main et passe la playlist en ordre personnalisé. */
+    fun savePlaylistOrder(p: Playlist, songs: List<Song>) {
+        UserStore.setPlaylistOrder(p.id, songs.map { it.id })
+        UserStore.setPlaylistSort(p.id, PlaylistSort.CUSTOM)
+        _messages.tryEmit("Nouvel ordre enregistré")
     }
 
     // ---------------- Connexion au service ----------------

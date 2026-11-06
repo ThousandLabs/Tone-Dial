@@ -34,6 +34,7 @@ import com.thousandlabs.tonedial.data.Playlist
 import com.thousandlabs.tonedial.data.Song
 import com.thousandlabs.tonedial.data.SongArt
 import com.thousandlabs.tonedial.data.SongSort
+import com.thousandlabs.tonedial.data.PlaylistSort
 import com.thousandlabs.tonedial.data.art
 import kotlinx.coroutines.launch
 
@@ -484,10 +485,38 @@ fun FolderDetailScreen(vm: MainViewModel, nav: Nav, path: String) {
 }
 
 @Composable
+private fun SortMenuButton(current: PlaylistSort, options: List<PlaylistSort>, onPick: (PlaylistSort) -> Unit, extra: (@Composable (close: () -> Unit) -> Unit)? = null) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }) { Icon(Icons.Outlined.Sort, "Trier") }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = TdColors.SurfaceHigh) {
+            Text(
+                "TRIER PAR",
+                style = MaterialTheme.typography.labelLarge,
+                color = TdColors.TextDim,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+            options.forEach { o ->
+                DropdownMenuItem(
+                    text = { Text(o.label, color = if (o == current) TdColors.Accent else TdColors.Text) },
+                    trailingIcon = { if (o == current) Icon(Icons.Outlined.Check, null, tint = TdColors.Accent) },
+                    onClick = { open = false; onPick(o) },
+                )
+            }
+            if (extra != null) {
+                HorizontalDivider(color = TdColors.Divider)
+                extra { open = false }
+            }
+        }
+    }
+}
+
+@Composable
 fun AutoDetailScreen(vm: MainViewModel, nav: Nav, kind: AutoList) {
-    // recalcule quand les données changent
+    // recalcule quand les données ou le tri changent
     vm.favorites.collectAsStateWithLifecycle().value
     vm.songs.collectAsStateWithLifecycle().value
+    vm.sortVersion.collectAsStateWithLifecycle().value
     val songs = vm.autoList(kind)
     val icon = when (kind) {
         AutoList.FAVORITES -> Icons.Outlined.FavoriteBorder
@@ -500,10 +529,20 @@ fun AutoDetailScreen(vm: MainViewModel, nav: Nav, kind: AutoList) {
         AutoList.MOST_PLAYED, AutoList.RECENTLY_PLAYED -> "Écoutez quelques morceaux, ils apparaîtront ici."
         AutoList.RECENTLY_ADDED -> "Aucun titre."
     }
+    val favSort = vm.favoritesSort()
     SongCollectionScreen(
         vm, nav, kind.label,
-        "${pluralTitles(songs.size)} · ${totalDuration(songs)}",
+        "${pluralTitles(songs.size)} · ${totalDuration(songs)}" + if (kind == AutoList.FAVORITES) "\nTri : ${favSort.label}" else "",
         songs.firstOrNull()?.art(), icon, songs, emptyText = empty,
+        actions = {
+            if (kind == AutoList.FAVORITES) {
+                SortMenuButton(
+                    current = favSort,
+                    options = PlaylistSort.entries.filter { it != PlaylistSort.CUSTOM },
+                    onPick = { vm.setFavoritesSort(it) },
+                )
+            }
+        },
     )
 }
 
@@ -511,15 +550,28 @@ fun AutoDetailScreen(vm: MainViewModel, nav: Nav, kind: AutoList) {
 fun PlaylistDetailScreen(vm: MainViewModel, nav: Nav, id: Long) {
     val playlists by vm.playlists.collectAsStateWithLifecycle()
     vm.songs.collectAsStateWithLifecycle().value
+    vm.sortVersion.collectAsStateWithLifecycle().value
     val playlist = playlists.firstOrNull { it.id == id }
     if (playlist == null) {
         MissingScreen(nav)
         return
     }
     val songs = vm.playlistSongs(playlist)
+    val sort = vm.playlistSort(playlist)
     var menu by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var reordering by remember { mutableStateOf(false) }
+
+    if (reordering) {
+        ReorderScreen(
+            title = playlist.name,
+            initial = songs,
+            onCancel = { reordering = false },
+            onSave = { vm.savePlaylistOrder(playlist, it); reordering = false },
+        )
+        return
+    }
 
     if (renaming) {
         TextInputDialog(
@@ -544,14 +596,29 @@ fun PlaylistDetailScreen(vm: MainViewModel, nav: Nav, id: Long) {
 
     SongCollectionScreen(
         vm, nav, playlist.name,
-        "${pluralTitles(songs.size)} · ${totalDuration(songs)}",
+        "${pluralTitles(songs.size)} · ${totalDuration(songs)}\nTri : ${sort.label}",
         songs.firstOrNull()?.art(), Icons.Outlined.QueueMusic, songs,
         playlist = playlist,
         emptyText = "Playlist vide. Appuyez sur « Ajouter des titres » pour la remplir.",
         actions = {
+            SortMenuButton(
+                current = sort,
+                options = PlaylistSort.entries,
+                onPick = { vm.setPlaylistSort(playlist, it) },
+                extra = { close ->
+                    DropdownMenuItem(
+                        text = { Text("Réorganiser à la main") },
+                        leadingIcon = { Icon(Icons.Outlined.DragHandle, null) },
+                        enabled = songs.size > 1,
+                        onClick = { close(); reordering = true },
+                    )
+                },
+            )
             Box {
                 IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "Options") }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, containerColor = TdColors.SurfaceHigh) {
+                    DropdownMenuItem(text = { Text("Réorganiser à la main") }, leadingIcon = { Icon(Icons.Outlined.DragHandle, null) },
+                        enabled = songs.size > 1, onClick = { menu = false; reordering = true })
                     DropdownMenuItem(text = { Text("Renommer") }, leadingIcon = { Icon(Icons.Outlined.Edit, null) },
                         onClick = { menu = false; renaming = true })
                     DropdownMenuItem(text = { Text("Supprimer") }, leadingIcon = { Icon(Icons.Outlined.Delete, null) },
@@ -560,6 +627,34 @@ fun PlaylistDetailScreen(vm: MainViewModel, nav: Nav, id: Long) {
             }
         },
     )
+}
+
+/** Écran de réorganisation : on part de l'ordre affiché et on déplace les titres avec la poignée. */
+@Composable
+private fun ReorderScreen(title: String, initial: List<Song>, onCancel: () -> Unit, onSave: (List<Song>) -> Unit) {
+    val items = remember(initial) { mutableStateListOf<Song>().apply { addAll(initial) } }
+    BackHandler(onBack = onCancel)
+    Column(Modifier.fillMaxSize()) {
+        TopAppBar(
+            title = { Text("Réorganiser", maxLines = 1) },
+            navigationIcon = { IconButton(onClick = onCancel) { Icon(Icons.Outlined.Close, "Annuler") } },
+            actions = {
+                TextButton(onClick = { onSave(items.toList()) }) {
+                    Icon(Icons.Outlined.Check, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Terminé")
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = TdColors.Background),
+        )
+        Text(
+            "Faites glisser la poignée à droite d'un titre pour le déplacer dans « $title ». Appuyez sur Terminé pour enregistrer.",
+            style = MaterialTheme.typography.bodySmall,
+            color = TdColors.TextDim,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
+        )
+        ReorderList(items, Modifier.fillMaxSize())
+    }
 }
 
 @Composable

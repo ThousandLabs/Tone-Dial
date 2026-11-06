@@ -210,7 +210,10 @@ private val guide = listOf(
             "Les playlists automatiques se remplissent toutes seules : Favoris, Les plus écoutés, Écoutés récemment, Ajoutés récemment.",
             "Pour créer votre playlist : onglet Playlists > Créer, ou menu d'un titre > Ajouter à une playlist.",
             "Dans une playlist, le bouton « Ajouter des titres » affiche toute votre musique sauf les titres déjà présents, ce qui évite les doublons. Cochez les titres voulus (recherche et « Tout sélectionner » disponibles), puis appuyez sur « Ajouter ».",
-            "Dans une playlist, les trois points en haut permettent de la renommer ou de la supprimer. Vos fichiers de musique ne sont jamais supprimés.",
+            "Pour trier une playlist, appuyez sur l'icône de tri en haut : ordre personnalisé, ajoutés récemment en premier, ajoutés en premier, titre (A → Z), artiste, album, téléchargés récemment ou durée. Chaque playlist garde son tri, et la lecture suit l'ordre affiché.",
+            "Pour placer les titres où vous voulez : icône de tri > « Réorganiser à la main ». Faites glisser la poignée à droite d'un titre, puis appuyez sur « Terminé ». La playlist passe alors en ordre personnalisé.",
+            "Les Favoris ont aussi leur bouton de tri.",
+            "Dans une playlist, les trois points en haut permettent aussi de la renommer ou de la supprimer. Vos fichiers de musique ne sont jamais supprimés.",
         ),
     ),
     GuideSection(

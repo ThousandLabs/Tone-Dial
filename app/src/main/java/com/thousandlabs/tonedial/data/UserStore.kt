@@ -50,14 +50,27 @@ object UserStore {
 
     fun toggleFavorite(id: Long) {
         val set = _favorites.value.toMutableSet()
-        if (!set.add(id)) set.remove(id)
+        if (!set.add(id)) set.remove(id) else markFavoriteAdded(listOf(id))
         _favorites.value = set
         prefs.edit().putString("favorites", JSONArray(set.toList()).toString()).apply()
     }
 
+    private val favAdded: MutableMap<Long, Long> by lazy { readLongLongMap("fav_added").toMutableMap() }
+
+    fun favoriteAddedAt(id: Long): Long = favAdded[id] ?: 0L
+
+    private fun markFavoriteAdded(ids: List<Long>) {
+        val now = System.currentTimeMillis()
+        ids.forEachIndexed { i, id -> favAdded[id] = now + i }
+        prefs.edit().putString("fav_added", JSONObject(favAdded.mapKeys { it.key.toString() }).toString()).apply()
+    }
+
     fun setFavorites(ids: List<Long>, favorite: Boolean) {
         val set = _favorites.value.toMutableSet()
-        if (favorite) set.addAll(ids) else set.removeAll(ids.toSet())
+        if (favorite) {
+            markFavoriteAdded(ids.filterNot { it in set })
+            set.addAll(ids)
+        } else set.removeAll(ids.toSet())
         _favorites.value = set
         prefs.edit().putString("favorites", JSONArray(set.toList()).toString()).apply()
     }
@@ -78,7 +91,9 @@ object UserStore {
 
     // ---------- Playlists ----------
     fun createPlaylist(name: String, songIds: List<Long> = emptyList()): Playlist {
-        val p = Playlist(System.currentTimeMillis(), name.trim().ifBlank { "Nouvelle playlist" }, songIds.distinct())
+        val now = System.currentTimeMillis()
+        val ids = songIds.distinct()
+        val p = Playlist(now, name.trim().ifBlank { "Nouvelle playlist" }, ids, ids.mapIndexed { i, id -> id to now + i }.toMap())
         savePlaylists(_playlists.value + p)
         return p
     }
@@ -88,15 +103,54 @@ object UserStore {
 
     fun deletePlaylist(id: Long) = savePlaylists(_playlists.value.filterNot { it.id == id })
 
-    fun addToPlaylist(id: Long, songIds: List<Long>) =
+    fun addToPlaylist(id: Long, songIds: List<Long>) {
+        val now = System.currentTimeMillis()
         savePlaylists(_playlists.value.map { p ->
-            if (p.id == id) p.copy(songIds = (p.songIds + songIds).distinct()) else p
+            if (p.id == id) {
+                val fresh = songIds.distinct().filterNot { it in p.songIds }
+                p.copy(
+                    songIds = p.songIds + fresh,
+                    added = p.added + fresh.mapIndexed { i, sid -> sid to now + i },
+                )
+            } else p
         })
+    }
+
+    /** Enregistre un nouvel ordre personnalisé. */
+    fun setPlaylistOrder(id: Long, order: List<Long>) =
+        savePlaylists(_playlists.value.map { p ->
+            if (p.id == id) {
+                val keep = order.filter { it in p.songIds }
+                p.copy(songIds = keep + p.songIds.filterNot { it in keep })
+            } else p
+        })
+
+    fun playlistSort(id: Long): PlaylistSort = runCatching {
+        PlaylistSort.valueOf(prefs.getString("pl_sort_$id", "CUSTOM")!!)
+    }.getOrDefault(PlaylistSort.CUSTOM)
+
+    fun setPlaylistSort(id: Long, sort: PlaylistSort) {
+        prefs.edit().putString("pl_sort_$id", sort.name).apply()
+        _sortVersion.value++
+    }
+
+    fun favoritesSort(): PlaylistSort = runCatching {
+        PlaylistSort.valueOf(prefs.getString("fav_sort", "TITLE")!!)
+    }.getOrDefault(PlaylistSort.TITLE)
+
+    fun setFavoritesSort(sort: PlaylistSort) {
+        prefs.edit().putString("fav_sort", sort.name).apply()
+        _sortVersion.value++
+    }
+
+    private val _sortVersion = MutableStateFlow(0)
+    /** Change à chaque modification de tri, pour rafraîchir l'affichage. */
+    val sortVersion: StateFlow<Int> = _sortVersion.asStateFlow()
 
     fun removeFromPlaylist(id: Long, songIds: List<Long>) {
         val remove = songIds.toSet()
         savePlaylists(_playlists.value.map { p ->
-            if (p.id == id) p.copy(songIds = p.songIds.filterNot { it in remove }) else p
+            if (p.id == id) p.copy(songIds = p.songIds.filterNot { it in remove }, added = p.added - remove) else p
         })
     }
 
@@ -118,6 +172,7 @@ object UserStore {
                 put("id", p.id)
                 put("name", p.name)
                 put("songs", JSONArray(p.songIds))
+                put("added", JSONObject(p.added.mapKeys { it.key.toString() }))
             })
         }
         prefs.edit().putString("playlists", arr.toString()).apply()
@@ -128,7 +183,13 @@ object UserStore {
         (0 until arr.length()).map { i ->
             val o = arr.getJSONObject(i)
             val songs = o.getJSONArray("songs")
-            Playlist(o.getLong("id"), o.getString("name"), (0 until songs.length()).map { songs.getLong(it) })
+            val added = o.optJSONObject("added")
+            Playlist(
+                o.getLong("id"),
+                o.getString("name"),
+                (0 until songs.length()).map { songs.getLong(it) },
+                added?.let { a -> a.keys().asSequence().associate { it.toLong() to a.getLong(it) } } ?: emptyMap(),
+            )
         }
     }.getOrDefault(emptyList())
 

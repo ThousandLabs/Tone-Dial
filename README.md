@@ -13,7 +13,7 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 - Sélection multiple (appui long) pour ajouter plusieurs titres à une playlist, à la file ou aux favoris en une fois
 - Balayage gauche / droite sur la barre de lecture ou la pochette pour changer de titre
 - Favoris et playlists automatiques : les plus écoutés, écoutés récemment, ajoutés récemment
-- Playlists personnelles (créer, renommer, supprimer, ajouter ou retirer des titres), avec un écran d'ajout qui masque les titres déjà présents
+- Playlists personnelles (créer, renommer, supprimer, ajouter ou retirer des titres), avec un écran d'ajout qui masque les titres déjà présents, un tri propre à chaque playlist et une réorganisation par glisser-déposer
 - Égaliseur avec préréglages, amplificateur de basses et effet d'espace
 - Paroles hors ligne : intégrées au fichier (MP3, FLAC), fichier `.lrc`, ou saisies dans l'appli, avec défilement synchronisé
 - Minuterie de sommeil (durée ou fin du titre), avec baisse progressive du son
@@ -23,6 +23,7 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 
 ## Nouveautés
 
+- **1.5** : tri des playlists (ordre d'ajout, titre, artiste, album, date de téléchargement, durée, ordre personnalisé), réorganisation par glisser-déposer, tri des Favoris.
 - **1.4** : mises à jour intégrées en deux appuis (bandeau, téléchargement dans l'appli, confirmation Android).
 - **1.3** : bouton « Ajouter des titres » dans les playlists, qui masque les titres déjà présents pour éviter les doublons, avec recherche et sélection multiple.
 - **1.2** : sélection multiple par appui long, bouton retour qui revient à l'onglet Titres, double appui pour quitter, balayage pour changer de titre, fondu de fin de minuterie.

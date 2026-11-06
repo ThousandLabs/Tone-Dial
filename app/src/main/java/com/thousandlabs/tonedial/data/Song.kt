@@ -57,8 +57,35 @@ data class Folder(
 data class Playlist(
     val id: Long,
     val name: String,
+    /** Ordre personnalisé des titres. */
     val songIds: List<Long>,
-)
+    /** Date d'ajout de chaque titre dans la playlist. */
+    val added: Map<Long, Long> = emptyMap(),
+) {
+    fun addedAt(songId: Long): Long = added[songId] ?: songIds.indexOf(songId).toLong()
+}
+
+enum class PlaylistSort(val label: String) {
+    CUSTOM("Ordre personnalisé"),
+    ADDED_NEWEST("Ajoutés récemment en premier"),
+    ADDED_OLDEST("Ajoutés en premier"),
+    TITLE("Titre (A → Z)"),
+    ARTIST("Artiste"),
+    ALBUM("Album"),
+    DOWNLOADED("Téléchargés récemment"),
+    DURATION("Durée"),
+}
+
+fun sortPlaylistSongs(songs: List<Song>, sort: PlaylistSort, addedAt: (Long) -> Long): List<Song> = when (sort) {
+    PlaylistSort.CUSTOM -> songs
+    PlaylistSort.ADDED_NEWEST -> songs.sortedByDescending { addedAt(it.id) }
+    PlaylistSort.ADDED_OLDEST -> songs.sortedBy { addedAt(it.id) }
+    PlaylistSort.TITLE -> songs.sortedBy { it.title.lowercase() }
+    PlaylistSort.ARTIST -> songs.sortedWith(compareBy<Song> { it.artist.lowercase() }.thenBy { it.title.lowercase() })
+    PlaylistSort.ALBUM -> songs.sortedWith(compareBy<Song> { it.album.lowercase() }.thenBy { it.track })
+    PlaylistSort.DOWNLOADED -> songs.sortedByDescending { it.dateAdded }
+    PlaylistSort.DURATION -> songs.sortedByDescending { it.duration }
+}
 
 enum class SongSort(val label: String) {
     TITLE("Titre"),
