@@ -131,7 +131,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun loadLibrary() {
         viewModelScope.launch {
             _loading.value = true
-            _allSongs.value = MusicRepository.loadSongs(ctx, UserStore.minDurationSec.value * 1000L, smartTags())
+            _allSongs.value = MusicRepository.loadSongs(ctx, UserStore.minDurationSec.value * 1000L, artistMode())
             applyFilters()
             _loading.value = false
             // une seule fois : retire les pochettes partagées à tort par l'ancienne recherche
@@ -352,6 +352,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setSort(s: SongSort) = UserStore.setSort(s)
+
+    /** Mode d'identification des artistes ; l'ancien interrupteur désactivé devient « Regrouper, titres intacts ». */
+    fun artistMode(): com.thousandlabs.tonedial.data.ArtistMode {
+        val saved = UserStore.getString("artist_mode")
+        return runCatching { com.thousandlabs.tonedial.data.ArtistMode.valueOf(saved!!) }.getOrElse {
+            if (UserStore.getBool("smart_tags", true)) com.thousandlabs.tonedial.data.ArtistMode.FULL
+            else com.thousandlabs.tonedial.data.ArtistMode.GROUP
+        }
+    }
+
+    fun setArtistMode(mode: com.thousandlabs.tonedial.data.ArtistMode) {
+        UserStore.putString("artist_mode", mode.name)
+        loadLibrary()
+    }
 
     fun smartTags(): Boolean = UserStore.getBool("smart_tags", true)
 

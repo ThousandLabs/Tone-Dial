@@ -30,6 +30,7 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 
 ## Nouveautés
 
+- **1.17** : nouveau mode « Regrouper, titres intacts » pour l'onglet Artistes, artistes repérés quand plusieurs titres commencent par les mêmes mots, openings rangés par anime.
 - **1.16** : noms de fichiers collés reconnus (« AJR-World'sSmallestViolin(OfficialVideo)_567 »), recherche de pochettes et de paroles indépendante du réglage d'affichage des artistes.
 - **1.15** : recherche de paroles bien plus efficace : noms de fichiers nettoyés, chanson officielle retrouvée via Deezer ou AnimeThemes (openings), formulations raccourcies, paroles synchronisées vérifiées par la durée.
 - **1.14** : retour à l'icône d'origine (cadran doré), redessinée avec des traits plus épais pour être nette.

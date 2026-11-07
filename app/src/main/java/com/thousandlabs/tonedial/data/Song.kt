@@ -89,6 +89,13 @@ fun sortPlaylistSongs(songs: List<Song>, sort: PlaylistSort, addedAt: (Long) -> 
     PlaylistSort.DURATION -> songs.sortedByDescending { it.duration }
 }
 
+/** Façon de repérer les artistes. */
+enum class ArtistMode(val label: String) {
+    OFF("Désactivé"),
+    GROUP("Regrouper, titres intacts"),
+    FULL("Séparer artiste et titre"),
+}
+
 enum class SongSort(val label: String) {
     TITLE("Titre"),
     ARTIST("Artiste"),

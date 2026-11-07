@@ -179,7 +179,10 @@ private val guide = listOf(
             "Les mentions inutiles sont retirées des titres : (Official Video), [Lyrics], (Audio), (Clip Officiel), noms de sites de téléchargement, numéros de piste…",
             "Les artistes invités sont reconnus (feat., ft., virgules, « & ») : un titre « Dadju feat. Tayc » apparaît chez Dadju et chez Tayc dans l'onglet Artistes. Le menu d'un titre propose d'ouvrir chacun de ses artistes.",
             "Si un titre est mal reconnu : menu du titre > « Modifier titre, artiste, album ». La correction s'applique partout dans l'appli, et « Rétablir » revient aux informations d'origine.",
-            "Vos fichiers ne sont jamais modifiés. Pour désactiver la reconnaissance automatique : Menu > Réglages > Identifier les artistes.",
+            "Menu > Réglages > Identifier les artistes propose trois modes. « Regrouper, titres intacts » garde vos noms exactement comme vous les avez écrits (« Eminem - Rap God ») tout en remplissant l'onglet Artistes. « Séparer artiste et titre » affiche « Rap God » avec l'artiste « Eminem ». « Désactivé » n'utilise que les informations des fichiers.",
+            "Même sans tiret, l'appli comprend qu'un groupe de mots est un artiste quand plusieurs titres commencent par lui (« Eminem Lose Yourself », « Eminem Mockingbird »…) ou quand c'est un artiste déjà connu ailleurs dans votre bibliothèque.",
+            "Les openings et endings sont rangés par anime : « One Piece Opening 25 - The Peak » apparaît chez « One Piece » dans l'onglet Artistes.",
+            "Vos fichiers ne sont jamais modifiés.",
         ),
     ),
     GuideSection(

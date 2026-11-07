@@ -8,7 +8,7 @@ import java.io.File
 
 object MusicRepository {
 
-    suspend fun loadSongs(context: Context, minDurationMs: Long, smartTags: Boolean = true): List<Song> = withContext(Dispatchers.IO) {
+    suspend fun loadSongs(context: Context, minDurationMs: Long, mode: ArtistMode = ArtistMode.FULL): List<Song> = withContext(Dispatchers.IO) {
         val songs = ArrayList<Song>()
         val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         @Suppress("DEPRECATION")
@@ -60,10 +60,21 @@ object MusicRepository {
                     val rawArtist = c.getString(artistCol)
                     var finalTitle = title
                     var finalArtist = cleanTag(rawArtist, "Artiste inconnu")
-                    if (smartTags) {
-                        val r = TagCleaner.clean(title, rawArtist)
-                        finalTitle = r.title
-                        finalArtist = r.artist ?: "Artiste inconnu"
+                    when (mode) {
+                        ArtistMode.FULL -> {
+                            val r = TagCleaner.clean(title, rawArtist)
+                            finalTitle = r.title
+                            finalArtist = r.artist ?: UNKNOWN
+                        }
+                        // titre intact : on se contente de repérer l'artiste
+                        ArtistMode.GROUP -> finalArtist = TagCleaner.clean(title, rawArtist).artist ?: UNKNOWN
+                        ArtistMode.OFF -> Unit
+                    }
+                    if (mode != ArtistMode.OFF) {
+                        animeArtist(finalArtist)?.let { (anime, theme) ->
+                            finalArtist = anime
+                            if (mode == ArtistMode.FULL) finalTitle = "$theme - $finalTitle"
+                        }
                     }
                     songs += Song(
                         id = c.getLong(idCol),
@@ -87,7 +98,73 @@ object MusicRepository {
         } catch (e: SecurityException) {
             return@withContext emptyList()
         }
-        songs
+        inferArtists(songs, mode)
+    }
+
+    private const val UNKNOWN = "Artiste inconnu"
+
+    private val animeTheme = Regex("""^(.+?)\s+((?:opening|op|ending|ed)\s*\d{1,3})$""", RegexOption.IGNORE_CASE)
+
+    /** « One Piece Opening 25 » → anime « One Piece », thème « Opening 25 » : tous les openings d'un anime ensemble. */
+    private fun animeArtist(artist: String): Pair<String, String>? {
+        if (artist == UNKNOWN) return null
+        val m = animeTheme.matchEntire(artist.trim()) ?: return null
+        return m.groupValues[1].trim() to m.groupValues[2].trim().replaceFirstChar { it.uppercase() }
+    }
+
+    private val stopWords = setOf(
+        "the", "a", "an", "le", "la", "les", "l", "un", "une", "des", "i", "my", "you", "we", "it", "in", "on",
+        "of", "de", "du", "to", "and", "et", "je", "tu", "me", "mon", "ma", "mes", "this", "that", "no", "oh",
+    )
+
+    /**
+     * Repère les artistes sans tiret : si plusieurs titres commencent par les mêmes mots
+     * (« Eminem Lose Yourself », « Eminem Mockingbird »…), ou par le nom d'un artiste déjà connu,
+     * ces mots sont l'artiste.
+     */
+    private fun inferArtists(songs: List<Song>, mode: ArtistMode): List<Song> {
+        if (mode == ArtistMode.OFF) return songs
+        val known = songs.asSequence().filter { it.artist != UNKNOWN }.flatMap { it.artists.asSequence() }
+            .filter { it.length >= 2 }.distinctBy { it.lowercase() }.sortedByDescending { it.length }.toList()
+
+        val unknown = songs.filter { it.artist == UNKNOWN }
+        if (unknown.isEmpty()) return songs
+        fun words(s: Song) = TagCleaner.prepare(s.title).split(Regex("""\s+""")).filter { it.isNotBlank() }
+        val counts = HashMap<String, Pair<String, Int>>()
+        unknown.forEach { s ->
+            val w = words(s)
+            if (w.isEmpty() || w[0].lowercase() in stopWords) return@forEach
+            for (n in 1..3) {
+                if (w.size <= n) break
+                val prefix = w.take(n).joinToString(" ")
+                val key = prefix.lowercase()
+                val cur = counts[key]
+                counts[key] = (cur?.first ?: prefix) to ((cur?.second ?: 0) + 1)
+            }
+        }
+
+        return songs.map { s ->
+            if (s.artist != UNKNOWN) return@map s
+            val prepared = TagCleaner.prepare(s.title)
+            var artist: String? = known.firstOrNull { k ->
+                prepared.length > k.length + 1 && prepared.startsWith(k, ignoreCase = true) &&
+                    !prepared[k.length].isLetterOrDigit()
+            }?.let { prepared.substring(0, it.length) }
+            if (artist == null) {
+                val w = words(s)
+                for (n in 3 downTo 1) {
+                    if (w.size <= n) continue
+                    val c = counts[w.take(n).joinToString(" ").lowercase()] ?: continue
+                    if (c.second >= 3) {
+                        artist = c.first
+                        break
+                    }
+                }
+            }
+            val a = artist ?: return@map s
+            val title = if (mode == ArtistMode.FULL) prepared.substring(a.length).trim(' ', '-', '–', '—', ':', '|').ifBlank { s.title } else s.title
+            s.copy(artist = a, title = title, artists = TagCleaner.artists(a, title))
+        }
     }
 
     private fun cleanTag(value: String?, fallback: String): String =

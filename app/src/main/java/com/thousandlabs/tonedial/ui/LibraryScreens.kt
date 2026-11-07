@@ -842,26 +842,34 @@ fun SettingsScreen(vm: MainViewModel, nav: Nav) {
                 }
                 ListItemRow(Icons.Outlined.Refresh, "Actualiser la bibliothèque", subtitle = "Rechercher les nouvelles musiques",
                     onClick = { vm.loadLibrary(); vm.notify("Bibliothèque actualisée") })
-                var smart by remember { mutableStateOf(vm.smartTags()) }
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Icons.Outlined.Person, null, tint = TdColors.Text, modifier = Modifier.size(22.dp))
-                    Spacer(Modifier.width(18.dp))
-                    Column(Modifier.weight(1f)) {
+                var mode by remember { mutableStateOf(vm.artistMode()) }
+                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.Person, null, tint = TdColors.Text, modifier = Modifier.size(22.dp))
+                        Spacer(Modifier.width(18.dp))
                         Text("Identifier les artistes", style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            "Sépare « Artiste - Titre » dans les noms de fichiers, retire les mentions comme (Official Video) et repère les artistes invités (feat.). Vos fichiers ne sont pas modifiés.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TdColors.TextDim,
-                        )
                     }
-                    Switch(
-                        checked = smart,
-                        onCheckedChange = { smart = it; vm.setSmartTags(it) },
-                        colors = SwitchDefaults.colors(checkedTrackColor = TdColors.Accent, checkedThumbColor = TdColors.Background),
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        when (mode) {
+                            com.thousandlabs.tonedial.data.ArtistMode.OFF -> "Seuls les artistes enregistrés dans les fichiers sont utilisés."
+                            com.thousandlabs.tonedial.data.ArtistMode.GROUP -> "Vos titres restent exactement comme vous les avez nommés (« Eminem - Rap God »). L'artiste est repéré au début du nom, ou quand plusieurs titres commencent par les mêmes mots, et l'onglet Artistes regroupe ses chansons."
+                            com.thousandlabs.tonedial.data.ArtistMode.FULL -> "« Eminem - Rap God » s'affiche avec le titre « Rap God » et l'artiste « Eminem ». Les mentions comme (Official Video) sont retirées."
+                        } + " Vos fichiers ne sont jamais modifiés.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TdColors.TextDim,
                     )
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        com.thousandlabs.tonedial.data.ArtistMode.entries.forEach { m ->
+                            FilterChip(
+                                selected = mode == m,
+                                onClick = { mode = m; vm.setArtistMode(m) },
+                                label = { Text(m.label, style = MaterialTheme.typography.bodySmall) },
+                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = TdColors.AccentDim, selectedLabelColor = TdColors.Accent),
+                            )
+                        }
+                    }
                 }
                 val tabOrder = rememberTabOrder()
                 var editTabs by remember { mutableStateOf(false) }
