@@ -29,9 +29,41 @@ object TagCleaner {
         artist.isNullOrBlank() || artist == "<unknown>" || artist.equals("unknown", true) ||
             artist.equals("Artiste inconnu", true) || artist.equals("Unknown artist", true)
 
+    private val trailingNumber = Regex("""[_\s]+\d{1,5}$""")
+    private val camelBreak = Regex("""(?<=[a-z0-9'’])(?=[A-Z])|(?<=[A-Za-z0-9])(?=[(\[])|(?<=[)\]])(?=[A-Za-z0-9])""")
+    private val gluedDash = Regex("""(?<=\S)-(?=\S)""")
+
+    /**
+     * Remet des espaces dans les noms collés des téléchargeurs :
+     * « AJR-World'sSmallestViolin(OfficialVideo)_567 » → « AJR - World's Smallest Violin (Official Video) ».
+     * Ne touche qu'aux noms sans aucun espace.
+     */
+    fun prepare(raw: String): String {
+        var t = raw.trim()
+        t = trailingNumber.replace(t, "").ifBlank { t }
+        if (!t.contains(' ')) {
+            if (t.contains('_')) {
+                t = t.replace('_', ' ')
+            } else {
+                t = camelBreak.replace(t, " ")
+                t = gluedDash.replaceFirst(t, " - ")
+            }
+        }
+        return t
+    }
+
+    /** Artiste et titre à utiliser pour les recherches en ligne, quel que soit le réglage d'affichage. */
+    fun searchKey(song: Song): Result {
+        val fromTitle = clean(song.title, song.artist.takeUnless { it == "Artiste inconnu" })
+        if (fromTitle.artist != null) return fromTitle
+        // sinon, essayer avec le nom du fichier
+        val fileName = song.path.substringAfterLast('/').substringBeforeLast('.')
+        val fromFile = clean(fileName, null)
+        return if (fromFile.artist != null) fromFile else fromTitle
+    }
+
     fun clean(rawTitle: String, rawArtist: String?): Result {
-        var title = rawTitle.trim()
-        if (!title.contains(' ') && title.contains('_')) title = title.replace('_', ' ')
+        var title = prepare(rawTitle)
         title = sitePrefix.replace(title, "")
         title = siteSuffix.replace(title, "")
         title = junkBrackets.replace(title, "")

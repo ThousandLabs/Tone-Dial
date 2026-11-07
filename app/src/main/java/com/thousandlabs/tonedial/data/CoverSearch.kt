@@ -93,7 +93,14 @@ object CoverSearch {
      * Retrouve la chanson officielle derrière un nom de fichier approximatif.
      * Sert aux pochettes et à la recherche de paroles.
      */
-    suspend fun identify(song: Song): Identity? {
+    suspend fun identify(original: Song): Identity? {
+        // recherche sur le nom nettoyé, même si l'affichage garde le nom d'origine
+        val key = TagCleaner.searchKey(original)
+        val song = original.copy(
+            title = key.title,
+            artist = key.artist ?: original.artist,
+            artists = key.artist?.let { TagCleaner.artists(it, key.title) } ?: original.artists,
+        )
         val artist = song.artist.takeUnless { it == "Artiste inconnu" }
         val full = listOfNotNull(artist, song.title).joinToString(" ")
         val fileName = song.path.substringAfterLast('/').substringBeforeLast('.')

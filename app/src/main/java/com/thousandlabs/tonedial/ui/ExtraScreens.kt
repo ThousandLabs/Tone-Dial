@@ -197,7 +197,7 @@ private val guide = listOf(
         Icons.Outlined.Image, "Pochettes",
         listOf(
             "Quand un titre sans image est joué, Tone Dial cherche sa pochette officielle en ligne (Deezer, puis iTunes) et la garde sur le téléphone. Réglage : Menu > Réglages > Pochettes automatiques.",
-            "La recherche ignore les parties parasites des noms de fichiers (codes de vidéo, suites de lettres et de chiffres, (1), 320kbps, lyrics…) et vérifie la durée du morceau pour éviter les mauvaises pochettes.",
+            "La recherche ignore les parties parasites des noms de fichiers (codes de vidéo, suites de lettres et de chiffres, (1), _567, 320kbps, lyrics…), sépare les noms collés comme « AJR-World'sSmallestViolin » et vérifie la durée du morceau pour éviter les mauvaises pochettes. Elle fonctionne même si « Identifier les artistes » est désactivé : l'affichage garde alors vos noms d'origine.",
             "Les openings et endings d'anime (« One Piece Opening 25 - The Peak ») sont reconnus : l'appli retrouve la chanson officielle, ou à défaut utilise l'affiche de l'anime.",
             "Pour tout compléter d'un coup : Menu > Réglages > « Rechercher toutes les pochettes manquantes ». À la fin, « Titres sans pochette » liste ceux qui restent : choisissez une image dans la galerie ou relancez la recherche pour un titre.",
             "Pour choisir vous-même : menu du titre > Pochette > « Choisir une image » dans la galerie, ou « Chercher la pochette en ligne ».",

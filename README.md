@@ -30,6 +30,7 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 
 ## Nouveautés
 
+- **1.16** : noms de fichiers collés reconnus (« AJR-World'sSmallestViolin(OfficialVideo)_567 »), recherche de pochettes et de paroles indépendante du réglage d'affichage des artistes.
 - **1.15** : recherche de paroles bien plus efficace : noms de fichiers nettoyés, chanson officielle retrouvée via Deezer ou AnimeThemes (openings), formulations raccourcies, paroles synchronisées vérifiées par la durée.
 - **1.14** : retour à l'icône d'origine (cadran doré), redessinée avec des traits plus épais pour être nette.
 - **1.13** : nouvelle icône nette dans le style Thousand Labs, onglets de l'accueil réorganisables, image personnalisée pour les playlists, paroles recherchées automatiquement dès le début du morceau et recherche groupée, pochettes acceptées pour les clips plus longs que le titre officiel.

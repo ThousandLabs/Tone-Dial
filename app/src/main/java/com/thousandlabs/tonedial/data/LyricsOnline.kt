@@ -25,7 +25,13 @@ object LyricsOnline {
      * Essaie plusieurs formulations : nom nettoyé, chanson officielle retrouvée sur Deezer
      * (ou AnimeThemes pour les openings), puis titre raccourci.
      */
-    suspend fun find(song: Song): String? = withContext(Dispatchers.IO) {
+    suspend fun find(original: Song): String? = withContext(Dispatchers.IO) {
+        val key = TagCleaner.searchKey(original)
+        val song = original.copy(
+            title = key.title,
+            artist = key.artist ?: original.artist,
+            artists = key.artist?.let { TagCleaner.artists(it, key.title) } ?: original.artists,
+        )
         val durationSec = (song.duration / 1000).toInt()
         val artistRaw = song.artists.firstOrNull()?.takeUnless { it == "Artiste inconnu" }
         val artist = artistRaw?.let { CoverSearch.searchWords(it).joinToString(" ") }?.ifBlank { null }
@@ -115,8 +121,10 @@ object LyricsOnline {
 
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
 
-    fun googleUrl(song: Song): String {
-        val artist = song.artists.firstOrNull()?.takeUnless { it == "Artiste inconnu" }
+    fun googleUrl(original: Song): String {
+        val key = TagCleaner.searchKey(original)
+        val song = original.copy(title = key.title)
+        val artist = key.artist ?: original.artists.firstOrNull()?.takeUnless { it == "Artiste inconnu" }
         return "https://www.google.com/search?q=" + enc(listOfNotNull(featPart.replace(song.title, ""), artist, "paroles").joinToString(" "))
     }
 }
