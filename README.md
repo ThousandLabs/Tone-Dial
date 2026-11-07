@@ -30,6 +30,7 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 
 ## Nouveautés
 
+- **1.23** : minutage des paroles réglable : « Cette ligne commence maintenant » (recale la suite), décalage global par pas de 0,5 s, et une heure modifiée à la main décale les lignes suivantes.
 - **1.22** : appuyer sur un titre déjà présent dans la file d'attente y va directement, sans recréer la file (désactivable).
 - **1.21** : openings et endings identifiés via MyAnimeList (titre et interprète du bon opening), pochette officielle de la chanson ou affiche de l'anime ; groupes d'anime illustrés par l'affiche.
 - **1.20** : retour depuis un artiste, un album ou une playlist : l'onglet et la position dans la liste sont conservés.

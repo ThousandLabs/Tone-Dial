@@ -276,6 +276,7 @@ private fun SeekBar(ui: PlayerUi, vm: MainViewModel) {
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long, isPlaying: Boolean = false) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -285,17 +286,26 @@ private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long, isPlayi
     val notFound by vm.lyricsNotFoundOnline.collectAsStateWithLifecycle()
     var editing by remember { mutableStateOf(false) }
     var options by remember { mutableStateOf(false) }
+    var lineMenu by remember { mutableStateOf<Int?>(null) }
+    var timingDialog by remember { mutableStateOf(false) }
+    // texte .lrc modifiable : paroles enregistrées dans l'appli, sinon reconstruites avec leurs minutages
+    val editBase = com.thousandlabs.tonedial.data.UserStore.customLyrics(song.id)
+        ?: lyrics?.let { com.thousandlabs.tonedial.data.LyricsTiming.toLrc(it) }.orEmpty()
     var karaoke by remember { mutableStateOf(com.thousandlabs.tonedial.data.UserStore.getBool("lyrics_karaoke", true)) }
 
     if (editing) {
         TextInputDialog(
             title = "Paroles de « ${song.title} »",
-            initial = com.thousandlabs.tonedial.data.UserStore.customLyrics(song.id) ?: lyrics?.plainText.orEmpty(),
+            initial = editBase,
             placeholder = "Collez les paroles ici (le format .lrc synchronisé est accepté)",
             confirmLabel = "Enregistrer",
             singleLine = false,
             onDismiss = { editing = false },
-            onConfirm = { vm.saveLyrics(song, it); editing = false },
+            onConfirm = {
+                // une heure modifiée décale aussi les lignes suivantes
+                vm.saveLyrics(song, com.thousandlabs.tonedial.data.LyricsTiming.propagateEdit(editBase, it))
+                editing = false
+            },
         )
     }
 
@@ -375,6 +385,83 @@ private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long, isPlayi
                 val activeIndex = if (l.synced) {
                     l.lines.indexOfLast { (it.timeMs ?: 0L) <= positionMs + 300 }.coerceAtLeast(0)
                 } else -1
+                // appui long sur une ligne : recaler le minutage
+                lineMenu?.let { idx ->
+                    val target = l.lines.getOrNull(idx)
+                    AlertDialog(
+                        onDismissRequest = { lineMenu = null },
+                        title = { Text("Minutage des paroles") },
+                        text = {
+                            Column {
+                                Text(
+                                    "« ${target?.text.orEmpty().take(60)} »",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = TdColors.TextDim,
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                ListItemRow(
+                                    Icons.Outlined.Timer, "Cette ligne commence maintenant",
+                                    subtitle = "Recale cette ligne et toutes les suivantes sur ${formatDuration(smoothPosition.value)}",
+                                    onClick = {
+                                        val t = target?.timeMs
+                                        if (t != null) {
+                                            val delta = smoothPosition.value - t
+                                            val text = com.thousandlabs.tonedial.data.LyricsTiming.shift(
+                                                com.thousandlabs.tonedial.data.LyricsTiming.toLrc(l), idx, delta,
+                                            )
+                                            vm.saveLyrics(song, text, "Minutage ajusté à partir de cette ligne")
+                                        }
+                                        lineMenu = null
+                                    },
+                                )
+                                ListItemRow(Icons.Outlined.PlayArrow, "Aller à cette ligne", onClick = {
+                                    target?.timeMs?.let { vm.seekTo(it) }
+                                    lineMenu = null
+                                })
+                                ListItemRow(Icons.Outlined.Tune, "Décaler toutes les paroles", subtitle = "Avancer ou retarder par pas de 0,5 s", onClick = {
+                                    lineMenu = null
+                                    timingDialog = true
+                                })
+                            }
+                        },
+                        confirmButton = { TextButton(onClick = { lineMenu = null }) { Text("Fermer") } },
+                        containerColor = TdColors.Surface,
+                    )
+                }
+                if (timingDialog) {
+                    var total by remember { mutableLongStateOf(0L) }
+                    AlertDialog(
+                        onDismissRequest = { timingDialog = false },
+                        title = { Text("Décaler toutes les paroles") },
+                        text = {
+                            Column {
+                                Text(
+                                    "Si les paroles arrivent trop tôt, retardez-les (+). Si elles arrivent trop tard, avancez-les (−). Le changement s'applique tout de suite.",
+                                    style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim,
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    listOf(-1000L to "−1 s", -500L to "−0,5 s", 500L to "+0,5 s", 1000L to "+1 s").forEach { (d, label) ->
+                                        OutlinedButton(onClick = {
+                                            total += d
+                                            val text = com.thousandlabs.tonedial.data.LyricsTiming.shift(
+                                                com.thousandlabs.tonedial.data.LyricsTiming.toLrc(l), 0, d,
+                                            )
+                                            vm.saveLyrics(song, text, "Paroles décalées")
+                                        }, contentPadding = PaddingValues(horizontal = 10.dp)) { Text(label, color = TdColors.Text) }
+                                    }
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    "Décalage appliqué : ${if (total >= 0) "+" else "−"}${"%.1f".format(kotlin.math.abs(total) / 1000f).replace('.', ',')} s",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
+                        },
+                        confirmButton = { TextButton(onClick = { timingDialog = false }) { Text("Terminé") } },
+                        containerColor = TdColors.Surface,
+                    )
+                }
                 LaunchedEffect(activeIndex) {
                     if (activeIndex >= 0) runCatching { state.animateScrollToItem((activeIndex - 3).coerceAtLeast(0)) }
                 }
@@ -393,7 +480,7 @@ private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long, isPlayi
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(vertical = 6.dp)
-                                    .clickable { vm.seekTo(line.timeMs) },
+                                    .combinedClickable(onClick = { vm.seekTo(line.timeMs) }, onLongClick = { lineMenu = i }),
                             )
                             return@itemsIndexed
                         }
@@ -410,9 +497,11 @@ private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long, isPlayi
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = if (l.synced) 6.dp else 1.dp)
-                                .clickable(enabled = l.synced && line.timeMs != null) {
-                                    line.timeMs?.let { vm.seekTo(it) }
-                                },
+                                .combinedClickable(
+                                    enabled = l.synced && line.timeMs != null,
+                                    onClick = { line.timeMs?.let { vm.seekTo(it) } },
+                                    onLongClick = { lineMenu = i },
+                                ),
                         )
                     }
                     item {

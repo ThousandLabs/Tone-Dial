@@ -272,6 +272,8 @@ private val guide = listOf(
             "Les paroles synchronisées (minutages comme [01:23.45]) défilent en rythme avec la musique, et un appui sur une ligne y fait sauter la lecture.",
             "La ligne chantée se remplit lettre par lettre, façon karaoké. Si le fichier .lrc indique l'heure de chaque mot (format enrichi), le remplissage suit exactement l'artiste ; sinon il est estimé à partir du rythme de la ligne et peut avoir un léger décalage. Pour revenir au surlignage par ligne entière : Options, sous les paroles.",
             "Sous les paroles, « Options » permet d'en chercher d'autres, de les modifier ou de les supprimer.",
+            "Si les paroles sont décalées : pendant la lecture, restez appuyé sur une ligne au moment où l'artiste commence à la chanter, puis « Cette ligne commence maintenant ». Elle et toutes les suivantes se recalent. Pratique après une longue intro sans paroles.",
+            "« Décaler toutes les paroles » (même menu) avance ou retarde l'ensemble par pas de 0,5 s. Et dans « Modifier », si vous changez l'heure d'une ligne sans toucher aux suivantes, elles sont décalées du même écart automatiquement.",
         ),
     ),
     GuideSection(

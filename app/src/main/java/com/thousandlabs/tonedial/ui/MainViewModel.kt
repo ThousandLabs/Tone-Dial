@@ -821,11 +821,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         saveLyrics(song, text)
     }
 
-    fun saveLyrics(song: Song, text: String) {
+    fun saveLyrics(song: Song, text: String, message: String? = null) {
         UserStore.setCustomLyrics(song.id, text)
-        lyricsFor = null
-        refreshPlayer()
-        _messages.tryEmit(if (text.isBlank()) "Paroles supprimées" else "Paroles enregistrées")
+        if (text.isNotBlank() && lyricsFor == song.id) {
+            // mise à jour immédiate, sans recharger (évite un clignotement pendant les réglages)
+            _lyrics.value = LyricsLoader.parse(text, "Saisies dans l'appli")
+        } else {
+            lyricsFor = null
+            refreshPlayer()
+        }
+        _messages.tryEmit(message ?: if (text.isBlank()) "Paroles supprimées" else "Paroles enregistrées")
     }
 
     // ---------------- Sonnerie et partage ----------------
