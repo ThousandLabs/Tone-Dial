@@ -534,6 +534,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             .build()
 
     // ---------------- Commandes de lecture ----------------
+    /** Réglage : appuyer sur un titre déjà présent dans la file y va, au lieu de remplacer la file. */
+    fun tapJumpsInQueue(): Boolean = UserStore.getBool("tap_jump_queue", true)
+    fun setTapJumpsInQueue(on: Boolean) = UserStore.putBool("tap_jump_queue", on)
+
+    /**
+     * Appui sur un titre dans une liste. S'il est déjà dans la file d'attente, la lecture va
+     * simplement à sa place (la file et son ordre restent intacts). Sinon, la liste est lancée.
+     */
+    fun playFromList(list: List<Song>, index: Int) {
+        val c = controller
+        val song = list.getOrNull(index) ?: return
+        if (c != null && c.mediaItemCount > 0 && tapJumpsInQueue()) {
+            val target = song.id.toString()
+            val window = (0 until c.mediaItemCount).firstOrNull { c.getMediaItemAt(it).mediaId == target }
+            if (window != null) {
+                if (window != c.currentMediaItemIndex) c.seekToDefaultPosition(window)
+                if (c.playbackState == Player.STATE_IDLE) c.prepare()
+                c.play()
+                return
+            }
+        }
+        play(list, index)
+    }
+
     fun play(list: List<Song>, startIndex: Int = 0, shuffle: Boolean = false) {
         val c = controller ?: return
         if (list.isEmpty()) return

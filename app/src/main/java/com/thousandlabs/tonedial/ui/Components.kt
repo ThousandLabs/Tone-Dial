@@ -209,7 +209,7 @@ fun SelectableSongRow(
         isCurrent = song.id == currentId,
         selected = sel.isSelected(song.id),
         selectionMode = sel.active,
-        onClick = { if (sel.active) sel.toggle(song, pool, playlist) else vm.play(pool, index) },
+        onClick = { if (sel.active) sel.toggle(song, pool, playlist) else vm.playFromList(pool, index) },
         onLongClick = { sel.toggle(song, pool, playlist) },
         onMore = { nav.openMenu(song, playlist) },
         leadingNumber = leadingNumber,

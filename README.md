@@ -30,6 +30,7 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 
 ## Nouveautés
 
+- **1.22** : appuyer sur un titre déjà présent dans la file d'attente y va directement, sans recréer la file (désactivable).
 - **1.21** : openings et endings identifiés via MyAnimeList (titre et interprète du bon opening), pochette officielle de la chanson ou affiche de l'anime ; groupes d'anime illustrés par l'affiche.
 - **1.20** : retour depuis un artiste, un album ou une playlist : l'onglet et la position dans la liste sont conservés.
 - **1.19** : photos des artistes et groupes (Deezer, affiche de l'anime pour les openings), affichées dans l'onglet Artistes et utilisées comme pochette quand un titre n'en a pas.

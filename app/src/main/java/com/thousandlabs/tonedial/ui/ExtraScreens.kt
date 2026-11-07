@@ -189,6 +189,7 @@ private val guide = listOf(
         Icons.Outlined.PlayArrow, "Lecture",
         listOf(
             "Appuyez sur un titre pour lancer la lecture, ou sur « Lecture aléatoire » pour tout mélanger.",
+            "Si le titre est déjà dans la file d'attente, l'appui y va directement : la file et son ordre restent intacts (par exemple, de Rap God en 20e position à Godzilla en 50e). Pour remplacer la file, utilisez les boutons Lire ou Aléatoire d'un album, d'un artiste ou d'une playlist. Réglage : Menu > Réglages > Aller au titre dans la file.",
             "La barre du bas montre le titre en cours. Appuyez dessus pour ouvrir le lecteur complet.",
             "La musique continue écran éteint ou dans une autre appli. Les commandes sont aussi dans la notification et sur l'écran verrouillé.",
             "Débrancher les écouteurs ou couper le Bluetooth met la musique en pause automatiquement.",

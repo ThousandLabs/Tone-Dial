@@ -899,6 +899,27 @@ fun SettingsScreen(vm: MainViewModel, nav: Nav) {
                 )
                 SectionLabel("Pochettes")
                 CoverSettings(vm, nav)
+                SectionLabel("Lecture")
+                var tapJump by remember { mutableStateOf(vm.tapJumpsInQueue()) }
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Outlined.PlaylistPlay, null, tint = TdColors.Text, modifier = Modifier.size(22.dp))
+                    Spacer(Modifier.width(18.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Aller au titre dans la file", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "Appuyer sur un titre déjà présent dans la file d'attente y va directement, sans changer la file ni son ordre. Pour lancer une nouvelle lecture, utilisez les boutons Lire ou Aléatoire.",
+                            style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim,
+                        )
+                    }
+                    Switch(
+                        checked = tapJump,
+                        onCheckedChange = { tapJump = it; vm.setTapJumpsInQueue(it) },
+                        colors = SwitchDefaults.colors(checkedTrackColor = TdColors.Accent, checkedThumbColor = TdColors.Background),
+                    )
+                }
                 SectionLabel("Paroles")
                 LyricsSettings(vm)
                 SectionLabel("Son")
