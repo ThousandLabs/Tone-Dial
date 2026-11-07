@@ -244,6 +244,7 @@ private val guide = listOf(
         listOf(
             "Dans le lecteur, appuyez sur « File » : la file s'ouvre en plein écran, comme une playlist, avec tous les titres dans l'ordre de lecture. Le morceau en cours est surligné et la liste s'ouvre directement sur lui. Le bouton retour vous ramène au lecteur.",
             "Faites glisser la poignée à droite d'un titre pour le déplacer n'importe où, y compris le morceau en cours : la musique continue. Un titre placé au-dessus du morceau en cours ne sera pas joué ensuite (il ne le sera que si vous revenez en arrière ou appuyez dessus).",
+            "Pour descendre ou monter loin dans la liste, tenez le titre près du bas ou du haut de l'écran : la liste défile toute seule, de plus en plus vite à mesure que le doigt s'approche du bord. Pour aller encore plus vite : appui long sur le titre > « Déplacer à la position… », tapez par exemple 59, ou choisissez « En premier » ou « En dernier ».",
             "Cela fonctionne aussi en lecture aléatoire : l'ordre mélangé est remplacé par le vôtre et l'aléatoire reste activé. Le morceau choisi pour lancer l'aléatoire est toujours le premier.",
             "Restez appuyé sur un titre pour « Lire ensuite », « Lire maintenant » ou « Retirer de la file ». La croix le retire aussi. Si vous avez fait défiler la liste, le bouton « En cours » vous ramène au morceau qui joue.",
             "Depuis la file, vous pouvez activer ou couper l'aléatoire et enregistrer la file comme playlist. Les trois points en haut permettent aussi de vider la file.",
@@ -259,7 +260,7 @@ private val guide = listOf(
             "Pour créer votre playlist : onglet Playlists > Créer, ou menu d'un titre > Ajouter à une playlist.",
             "Dans une playlist, le bouton « Ajouter des titres » affiche toute votre musique sauf les titres déjà présents, ce qui évite les doublons. Cochez les titres voulus (recherche et « Tout sélectionner » disponibles), puis appuyez sur « Ajouter ».",
             "Pour trier une playlist, appuyez sur l'icône de tri en haut : ordre personnalisé, ajoutés récemment en premier, ajoutés en premier, titre (A → Z), artiste, album, téléchargés récemment ou durée. Chaque playlist garde son tri, et la lecture suit l'ordre affiché.",
-            "Pour placer les titres où vous voulez : icône de tri > « Réorganiser à la main ». Faites glisser la poignée à droite d'un titre, puis appuyez sur « Terminé ». La playlist passe alors en ordre personnalisé.",
+            "Pour placer les titres où vous voulez : icône de tri > « Réorganiser à la main ». Faites glisser la poignée à droite d'un titre (tenez-le près d'un bord pour faire défiler la liste), ou appuyez sur le titre pour taper directement sa nouvelle position ou le placer en premier ou en dernier. Appuyez ensuite sur « Terminé ». La playlist passe alors en ordre personnalisé.",
             "Les Favoris ont aussi leur bouton de tri.",
             "Dans une playlist, les trois points en haut permettent aussi de la renommer, de changer son image (photo de la galerie) ou de la supprimer. Vos fichiers de musique ne sont jamais supprimés.",
         ),

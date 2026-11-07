@@ -36,6 +36,7 @@ fun QueueScreen(vm: MainViewModel, nav: Nav) {
     var saving by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
     var menuFor by remember { mutableStateOf<Int?>(null) }
+    var moveFor by remember { mutableStateOf<Int?>(null) }
 
     val curPos = ui.currentPos
     val currentEntry = ui.queue.getOrNull(curPos)
@@ -100,6 +101,17 @@ fun QueueScreen(vm: MainViewModel, nav: Nav) {
 
         val listState = rememberLazyListState(initialFirstVisibleItemIndex = curPos.coerceAtLeast(0))
         val scope = rememberCoroutineScope()
+        moveFor?.let { from ->
+            val title = entries.getOrNull(from)?.let { songMap[it.songId]?.title }.orEmpty()
+            PositionDialog(title, from, entries.size, onDismiss = { moveFor = null }) { to ->
+                moveFor = null
+                if (to != from) {
+                    vm.moveInQueue(from, to)
+                    // la liste se place sur la nouvelle position (+1 : l'en-tête)
+                    scope.launch { listState.animateScrollToItem((to + 1 - 2).coerceAtLeast(0)) }
+                }
+            }
+        }
         // le morceau en cours est-il visible à l'écran ?
         val currentVisible by remember {
             derivedStateOf {
@@ -148,7 +160,7 @@ fun QueueScreen(vm: MainViewModel, nav: Nav) {
                                 }
                             }
                             Text(
-                                "Glissez la poignée pour déplacer un titre. Les titres placés au-dessus du morceau en cours ne seront pas joués ensuite.",
+                                "Glissez la poignée pour déplacer un titre (tenez-le près du bas ou du haut pour faire défiler), ou appui long > « Déplacer à la position… ». Les titres placés au-dessus du morceau en cours ne seront pas joués ensuite.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = TdColors.TextDim,
                                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
@@ -186,6 +198,11 @@ fun QueueScreen(vm: MainViewModel, nav: Nav) {
                                     text = { Text("Lire maintenant") },
                                     leadingIcon = { Icon(Icons.Outlined.PlayArrow, null) },
                                     onClick = { menuFor = null; vm.jumpTo(entry.windowIndex) },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Déplacer à la position…") },
+                                    leadingIcon = { Icon(Icons.Outlined.SwapVert, null) },
+                                    onClick = { menuFor = null; moveFor = index },
                                 )
                                 DropdownMenuItem(
                                     text = { Text("Retirer de la file") },

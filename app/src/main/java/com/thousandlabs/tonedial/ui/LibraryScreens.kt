@@ -727,7 +727,7 @@ private fun ReorderScreen(title: String, initial: List<Song>, onCancel: () -> Un
             colors = TopAppBarDefaults.topAppBarColors(containerColor = TdColors.Background),
         )
         Text(
-            "Faites glisser la poignée à droite d'un titre pour le déplacer dans « $title ». Appuyez sur Terminé pour enregistrer.",
+            "Faites glisser la poignée à droite d'un titre pour le déplacer dans « $title » (tenez-le près d'un bord pour faire défiler), ou appuyez sur le titre pour choisir sa position. Appuyez sur Terminé pour enregistrer.",
             style = MaterialTheme.typography.bodySmall,
             color = TdColors.TextDim,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),

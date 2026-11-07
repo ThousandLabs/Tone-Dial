@@ -1,6 +1,9 @@
 package com.thousandlabs.tonedial.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.*
@@ -10,6 +13,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DragHandle
+import androidx.compose.material.icons.outlined.VerticalAlignBottom
+import androidx.compose.material.icons.outlined.VerticalAlignTop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -43,40 +48,73 @@ fun <T> ReorderableList(
 ) {
     val scope = rememberCoroutineScope()
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val edgePx = with(density) { 110.dp.toPx() }      // zone près des bords qui fait défiler
+    val maxSpeedPx = with(density) { 34.dp.toPx() }   // vitesse maximale, par image (~60 par seconde)
     var draggingKey by remember { mutableStateOf<Any?>(null) }
     var startIndex by remember { mutableIntStateOf(-1) }
-    var offset by remember { mutableFloatStateOf(0f) }
+    // position voulue du haut de l'élément tenu, dans le repère de la liste à l'écran (suit le doigt)
+    var dragTop by remember { mutableFloatStateOf(0f) }
+    var dragSize by remember { mutableIntStateOf(0) }
 
     fun indexOfDragged(): Int = draggingKey?.let { k -> items.indexOfFirst { key(it) == k } } ?: -1
 
-    fun onDrag(delta: Float) {
-        offset += delta
+    /** Si le centre de l'élément tenu passe sur une autre ligne, il prend sa place. */
+    fun checkSwap() {
         val index = indexOfDragged()
         if (index < 0) return
-        val visible = listState.layoutInfo.visibleItemsInfo
-        val current = visible.firstOrNull { it.index == index + headerCount } ?: return
-        val center = current.offset + offset + current.size / 2f
-        val target = visible.firstOrNull {
+        val center = dragTop + dragSize / 2f
+        val target = listState.layoutInfo.visibleItemsInfo.firstOrNull {
             val li = it.index - headerCount
             li != index && li in items.indices && center > it.offset && center < it.offset + it.size
+        } ?: return
+        val to = target.index - headerCount
+        // garde la liste immobile quand la première ligne visible est concernée par l'échange
+        val first = listState.firstVisibleItemIndex
+        val firstOffset = listState.firstVisibleItemScrollOffset
+        items.add(to, items.removeAt(index))
+        if (first == index + headerCount || first == target.index) {
+            scope.launch { listState.scrollToItem(first, firstOffset) }
         }
-        if (target != null) {
-            val moved = items.removeAt(index)
-            items.add(target.index - headerCount, moved)
-            offset += (current.offset - target.offset).toFloat()
+    }
+
+    fun onDrag(delta: Float) {
+        val info = listState.layoutInfo
+        dragTop = (dragTop + delta).coerceIn(
+            info.viewportStartOffset - dragSize / 2f,
+            info.viewportEndOffset - dragSize / 2f,
+        )
+        checkSwap()
+    }
+
+    // défilement automatique continu tant que l'élément est tenu près d'un bord, même doigt immobile
+    LaunchedEffect(draggingKey) {
+        if (draggingKey == null) return@LaunchedEffect
+        while (true) {
+            withFrameNanos { }
+            val info = listState.layoutInfo
+            val top = dragTop
+            val bottom = dragTop + dragSize
+            val ratio = when {
+                bottom > info.viewportEndOffset - edgePx ->
+                    ((bottom - (info.viewportEndOffset - edgePx)) / edgePx).coerceIn(0f, 1f)
+                top < info.viewportStartOffset + edgePx ->
+                    -((info.viewportStartOffset + edgePx - top) / edgePx).coerceIn(0f, 1f)
+                else -> 0f
+            }
+            if (ratio != 0f) {
+                // lent à l'entrée de la zone, très rapide tout contre le bord
+                val speed = maxSpeedPx * (0.12f + 0.88f * ratio * ratio)
+                val scrolled = listState.scrollBy(if (ratio > 0) speed else -speed)
+                if (scrolled != 0f) checkSwap()
+            }
         }
-        val viewportEnd = listState.layoutInfo.viewportEndOffset
-        val top = current.offset + offset
-        val bottom = top + current.size
-        if (bottom > viewportEnd - 60) scope.launch { listState.scrollBy(24f) }
-        else if (top < 60) scope.launch { listState.scrollBy(-24f) }
     }
 
     fun finish() {
         val end = indexOfDragged()
         val start = startIndex
         draggingKey = null
-        offset = 0f
         startIndex = -1
         if (start >= 0 && end >= 0 && start != end) onMoved(start, end)
     }
@@ -89,22 +127,31 @@ fun <T> ReorderableList(
             val handle = Modifier.pointerInput(k) {
                 detectDragGestures(
                     onDragStart = {
-                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                        draggingKey = k
-                        startIndex = items.indexOfFirst { key(it) == k }
-                        offset = 0f
+                        val info = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == k }
+                        if (info != null) {
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                            dragTop = info.offset.toFloat()
+                            dragSize = info.size
+                            draggingKey = k
+                            startIndex = items.indexOfFirst { key(it) == k }
+                        }
                     },
                     onDragEnd = { finish() },
                     onDragCancel = { finish() },
                 ) { change, amount ->
                     change.consume()
-                    onDrag(amount.y)
+                    if (draggingKey == k) onDrag(amount.y)
                 }
             }
             Box(
                 Modifier
                     .zIndex(if (dragging) 1f else 0f)
-                    .graphicsLayer { translationY = if (dragging) offset else 0f }
+                    .graphicsLayer {
+                        translationY = if (dragging) {
+                            val info = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == k }
+                            if (info != null) dragTop - info.offset else 0f
+                        } else 0f
+                    }
                     .background(if (dragging) TdColors.SurfaceHigh else Color.Transparent)
             ) {
                 row(item, i, dragging, handle)
@@ -124,10 +171,25 @@ fun DragHandleBox(handle: Modifier, dragging: Boolean) {
 /** Réorganisation d'une liste de titres (playlists). */
 @Composable
 fun ReorderList(items: MutableList<Song>, modifier: Modifier = Modifier) {
-    ReorderableList(items, key = { it.id }, modifier = modifier) { song, i, dragging, handle ->
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    var moving by remember { mutableStateOf<Int?>(null) }
+    moving?.let { from ->
+        items.getOrNull(from)?.let { song ->
+            PositionDialog(song.title, from, items.size, onDismiss = { moving = null }) { to ->
+                moving = null
+                if (to != from) {
+                    items.add(to, items.removeAt(from))
+                    scope.launch { listState.animateScrollToItem((to - 2).coerceAtLeast(0)) }
+                }
+            }
+        }
+    }
+    ReorderableList(items, key = { it.id }, modifier = modifier, listState = listState) { song, i, dragging, handle ->
         Row(
             Modifier
                 .fillMaxWidth()
+                .clickable { moving = i }
                 .padding(start = 16.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -143,4 +205,52 @@ fun ReorderList(items: MutableList<Song>, modifier: Modifier = Modifier) {
             DragHandleBox(handle, dragging)
         }
     }
+}
+
+/**
+ * Déplacement direct sans glisser : « Déplacer à la position 59 », « Placer en premier / en dernier ».
+ * [from] et la valeur rendue sont des positions comptées à partir de 0.
+ */
+@Composable
+fun PositionDialog(title: String, from: Int, count: Int, onDismiss: () -> Unit, onMove: (Int) -> Unit) {
+    var text by remember { mutableStateOf("") }
+    val wanted = text.trim().toIntOrNull()
+    val valid = wanted != null && wanted in 1..count
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Déplacer le titre") },
+        text = {
+            Column {
+                Text(title, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = TdColors.TextDim)
+                Spacer(Modifier.height(4.dp))
+                Text("Position actuelle : ${from + 1} sur $count", style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim)
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { v -> text = v.filter { it.isDigit() }.take(5) },
+                    singleLine = true,
+                    label = { Text("Nouvelle position (1 à $count)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    isError = text.isNotBlank() && !valid,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { onMove(0) }, enabled = from != 0, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Outlined.VerticalAlignTop, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("En premier", maxLines = 1)
+                    }
+                    OutlinedButton(onClick = { onMove(count - 1) }, enabled = from != count - 1, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Outlined.VerticalAlignBottom, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("En dernier", maxLines = 1)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onMove(wanted!! - 1) }, enabled = valid) { Text("Déplacer") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Annuler") } },
+        containerColor = TdColors.Surface,
+    )
 }
