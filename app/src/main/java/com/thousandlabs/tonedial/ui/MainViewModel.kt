@@ -203,11 +203,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (added > 0) _messages.tryEmit(if (added == 1) "1 nouveau titre ajouté à la bibliothèque" else "$added nouveaux titres ajoutés à la bibliothèque")
     }
 
-    override fun onCleared() {
-        mediaObserver?.let { runCatching { ctx.contentResolver.unregisterContentObserver(it) } }
-        super.onCleared()
-    }
-
     // ---------------- Titres masqués ----------------
     val hiddenSongs = com.thousandlabs.tonedial.data.LibraryPrefs.hidden
 
@@ -1070,6 +1065,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     override fun onCleared() {
+        mediaObserver?.let { runCatching { ctx.contentResolver.unregisterContentObserver(it) } }
         ticker?.cancel()
         controller?.removeListener(listener)
         controller?.release()
