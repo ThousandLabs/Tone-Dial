@@ -21,7 +21,7 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 - Minuterie de sommeil (durée ou fin du titre), avec baisse progressive du son
 - Widget d'écran d'accueil et raccourcis sur l'icône (Aléatoire, Reprendre, Rechercher)
 - Dossiers masqués (audios WhatsApp, enregistrements…), correction manuelle des informations sans modifier les fichiers
-- Pochettes manquantes recherchées en ligne (Deezer, iTunes, AnimeThemes pour les openings) même avec des noms de fichiers abîmés, ou choisies dans la galerie ; fond du lecteur aux couleurs de la pochette
+- Pochettes manquantes recherchées en ligne (Deezer, iTunes, MyAnimeList et AnimeThemes pour les openings) même avec des noms de fichiers abîmés, ou choisies dans la galerie ; fond du lecteur aux couleurs de la pochette
 - Vitesse de lecture de 0,5× à 2× sans changement de tonalité
 - Statistiques d'écoute (7 jours, 30 jours, depuis toujours)
 - Sauvegarde et restauration des playlists, favoris, paroles et réglages
@@ -30,6 +30,7 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 
 ## Nouveautés
 
+- **1.21** : openings et endings identifiés via MyAnimeList (titre et interprète du bon opening), pochette officielle de la chanson ou affiche de l'anime ; groupes d'anime illustrés par l'affiche.
 - **1.20** : retour depuis un artiste, un album ou une playlist : l'onglet et la position dans la liste sont conservés.
 - **1.19** : photos des artistes et groupes (Deezer, affiche de l'anime pour les openings), affichées dans l'onglet Artistes et utilisées comme pochette quand un titre n'en a pas.
 - **1.18** : paroles façon karaoké, la ligne chantée se remplit lettre par lettre (exact avec les .lrc enrichis, estimé sinon).

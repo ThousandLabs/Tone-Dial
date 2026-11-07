@@ -100,6 +100,19 @@ object Covers {
         true
     }
 
+    /** Une seule fois : oublie les photos d'anime venues d'un artiste homonyme, et les échecs passés. */
+    fun resetAnimeArtistImages(animeNames: List<String>) {
+        if (!::dir.isInitialized) return
+        animeNames.forEach { n ->
+            val f = artistFileName(n)
+            File(dir, f).delete()
+            stamps.remove(f)
+        }
+        artistFailed.clear()
+        saveArtistFailed()
+        _version.value++
+    }
+
     private var artistJob: Job? = null
 
     /** Complète en arrière-plan les images manquantes d'une liste d'artistes. */

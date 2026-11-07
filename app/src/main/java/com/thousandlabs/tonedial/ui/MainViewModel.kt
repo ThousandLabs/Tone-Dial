@@ -134,6 +134,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _allSongs.value = MusicRepository.loadSongs(ctx, UserStore.minDurationSec.value * 1000L, artistMode())
             applyFilters()
             _loading.value = false
+            // une seule fois : les groupes d'openings prennent désormais l'affiche de l'anime (MyAnimeList)
+            if (!UserStore.getBool("anime_images_v2", false)) {
+                UserStore.putBool("anime_images_v2", true)
+                val animeGroups = _songs.value.filter { com.thousandlabs.tonedial.data.Covers.looksAnime(it) }
+                    .flatMap { it.artists }.filter { it != "Artiste inconnu" }.distinct()
+                com.thousandlabs.tonedial.data.Covers.resetAnimeArtistImages(animeGroups)
+            }
             // une seule fois : retire les pochettes partagées à tort par l'ancienne recherche
             if (!UserStore.getBool("covers_cleanup_v2", false)) {
                 UserStore.putBool("covers_cleanup_v2", true)

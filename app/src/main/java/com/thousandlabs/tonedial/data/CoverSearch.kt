@@ -186,6 +186,8 @@ object CoverSearch {
     suspend fun artistImage(name: String, isAnime: Boolean): String? {
         val target = norm(name)
         if (target.isBlank()) return null
+        // groupe d'openings (« One Piece ») : l'affiche de l'anime, pas un artiste homonyme
+        if (isAnime) return animePosterAny(name)
         val json = getJson("https://api.deezer.com/search/artist?limit=5&q=" + enc(name))
         val data = json?.let { runCatching { JSONObject(it).optJSONArray("data") }.getOrNull() }
         if (data != null) {
@@ -200,7 +202,6 @@ object CoverSearch {
                 return pic
             }
         }
-        if (isAnime) return animePoster(name)
         return null
     }
 
@@ -296,7 +297,86 @@ object CoverSearch {
     }
 
     /** Openings et endings : la vraie chanson via AnimeThemes, puis sa pochette ou l'affiche de l'anime. */
+    // ------------------------------------------------------------------
+    // Openings et endings : MyAnimeList (Jikan) d'abord, AnimeThemes en secours
+    // ------------------------------------------------------------------
+
+    private data class AnimeInfo(val malId: Int, val poster: String?)
+
+    /** L'anime le plus connu correspondant au nom (ex. « One Piece » → la série TV). */
+    private suspend fun jikanAnime(name: String): AnimeInfo? {
+        val json = getJson("https://api.jikan.moe/v4/anime?limit=6&order_by=members&sort=desc&q=" + enc(name)) ?: return null
+        val data = runCatching { JSONObject(json).getJSONArray("data") }.getOrNull() ?: return null
+        if (data.length() == 0) return null
+        val target = norm(name)
+        var chosen: JSONObject? = null
+        for (i in 0 until data.length()) {
+            val a = data.getJSONObject(i)
+            val titles = listOf(a.optString("title"), a.optString("title_english")).map { norm(it) }
+            if (titles.any { it == target }) { chosen = a; break }
+        }
+        val a = chosen ?: data.getJSONObject(0)
+        val poster = a.optJSONObject("images")?.optJSONObject("jpg")?.let { j ->
+            j.optString("large_image_url").ifBlank { j.optString("image_url") }
+        }?.ifBlank { null }
+        return AnimeInfo(a.optInt("mal_id"), poster)
+    }
+
+    private val themeEntry = Regex("""^\s*#?(\d+)?:?\s*"(.+?)"\s+by\s+(.+?)\s*(?:\(eps?\b.*)?$""", RegexOption.IGNORE_CASE)
+
+    /** Retire la version japonaise entre parenthèses : « We Are! (ウィーアー!) » → « We Are! ». */
+    private fun stripNative(s: String): String =
+        s.replace(Regex("""\s*\([^)]*[^\x00-\x7F][^)]*\)"""), "").trim().ifBlank { s.trim() }
+
     private suspend fun findAnime(animeName: String, kind: String, number: Int, song: Song): Identity? {
+        val name = searchWords(animeName).joinToString(" ")
+        if (name.isBlank()) return null
+        val isOpening = kind.lowercase().startsWith("o")
+        val info = runCatching { jikanAnime(name) }.getOrNull()
+        if (info != null && info.malId > 0) {
+            delay(400) // limite de Jikan : 3 requêtes par seconde
+            val json = getJson("https://api.jikan.moe/v4/anime/${info.malId}/themes")
+            val list = json?.let { runCatching { JSONObject(it).getJSONObject("data").optJSONArray(if (isOpening) "openings" else "endings") }.getOrNull() }
+            var title: String? = null
+            var artist: String? = null
+            if (list != null && list.length() > 0) {
+                val entries = (0 until list.length()).map { list.getString(it) }
+                val parsed = entries.mapNotNull { e -> themeEntry.find(e)?.let { m -> Triple(m.groupValues[1].toIntOrNull(), m.groupValues[2], m.groupValues[3]) } }
+                val pick = parsed.firstOrNull { it.first == number } ?: parsed.getOrNull(number - 1)
+                if (pick != null) {
+                    title = stripNative(pick.second)
+                    artist = stripNative(pick.third)
+                }
+            }
+            val t = title
+            if (!t.isNullOrBlank()) {
+                val a = artist.orEmpty()
+                val reference = tokens("$t $a ${song.title} ${song.artist}")
+                for (q in listOf("$a $t".trim(), t)) {
+                    pick(deezer(q), song, reference, 0, ignoreDuration = true)?.let {
+                        return Identity(t, a.ifBlank { it.artist }, it.durationSec, it.image, "Deezer")
+                    }
+                    delay(250)
+                }
+                pick(itunes("$a $t".trim()), song, reference, 0, ignoreDuration = true)?.let {
+                    return Identity(t, a.ifBlank { it.artist }, it.durationSec, it.image, "iTunes")
+                }
+                return Identity(t, a, 0, info.poster, "MyAnimeList")
+            }
+            if (info.poster != null) {
+                // chanson introuvable : l'affiche de l'anime, mais on tente d'abord AnimeThemes
+                findAnimeThemes(animeName, kind, number, song)?.let { return it }
+                return Identity("", "", 0, info.poster, "MyAnimeList")
+            }
+        }
+        return findAnimeThemes(animeName, kind, number, song)
+    }
+
+    /** Affiche d'un anime : MyAnimeList, sinon AnimeThemes. */
+    suspend fun animePosterAny(name: String): String? =
+        runCatching { jikanAnime(searchWords(name).joinToString(" "))?.poster }.getOrNull() ?: animePoster(name)
+
+    private suspend fun findAnimeThemes(animeName: String, kind: String, number: Int, song: Song): Identity? {
         val name = searchWords(animeName).joinToString(" ")
         if (name.isBlank()) return null
         val type = if (kind.lowercase().startsWith("o")) "OP" else "ED"
