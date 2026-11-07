@@ -53,6 +53,16 @@ object SleepTimer {
         _state.value = State(endAt = System.currentTimeMillis() + delay)
     }
 
+    /** Ajoute des minutes à la minuterie en cours (ou en démarre une). */
+    fun extend(minutes: Int) {
+        val endAt = _state.value.endAt
+        if (endAt == null) { start(minutes); return }
+        val remaining = (endAt - System.currentTimeMillis()).coerceAtLeast(0L) + minutes * 60_000L
+        cancel()
+        handler.postDelayed(stopRunnable, remaining)
+        _state.value = State(endAt = System.currentTimeMillis() + remaining)
+    }
+
     fun endOfTrack() {
         cancel()
         PlaybackService.instance?.player?.pauseAtEndOfMediaItems = true

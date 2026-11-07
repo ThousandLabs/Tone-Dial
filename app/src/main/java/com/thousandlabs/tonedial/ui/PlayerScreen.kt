@@ -600,6 +600,31 @@ private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long, isPlayi
 @Composable
 private fun SleepTimerDialog(onDismiss: () -> Unit) {
     val timer by SleepTimer.state.collectAsStateWithLifecycle()
+    var custom by remember { mutableStateOf(false) }
+    if (custom) {
+        var text by remember { mutableStateOf("") }
+        val minutes = text.toIntOrNull()?.takeIf { it in 1..600 }
+        AlertDialog(
+            onDismissRequest = { custom = false },
+            title = { Text("Autre durée") },
+            text = {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { v -> text = v.filter { it.isDigit() }.take(3) },
+                    singleLine = true,
+                    label = { Text("Minutes (1 à 600)") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { minutes?.let { SleepTimer.start(it) }; custom = false; onDismiss() }, enabled = minutes != null) { Text("Démarrer") }
+            },
+            dismissButton = { TextButton(onClick = { custom = false }) { Text("Annuler") } },
+            containerColor = TdColors.Surface,
+        )
+        return
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Minuterie de sommeil") },
@@ -613,6 +638,10 @@ private fun SleepTimerDialog(onDismiss: () -> Unit) {
                     })
                 }
                 ListItemRow(Icons.Outlined.MusicNote, "À la fin du titre en cours", onClick = { SleepTimer.endOfTrack(); onDismiss() })
+                ListItemRow(Icons.Outlined.Edit, "Autre durée…", subtitle = "Choisir le nombre de minutes", onClick = { custom = true })
+                if (timer.endAt != null) {
+                    ListItemRow(Icons.Outlined.MoreTime, "Ajouter 10 minutes", onClick = { SleepTimer.extend(10); onDismiss() })
+                }
                 if (timer.active) {
                     ListItemRow(Icons.Outlined.TimerOff, "Arrêter la minuterie", tint = TdColors.Accent, onClick = { SleepTimer.cancel(); onDismiss() })
                 }

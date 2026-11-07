@@ -304,6 +304,7 @@ private val guide = listOf(
     GuideSection(
         Icons.Outlined.Timer, "Minuterie de sommeil",
         listOf(
+            "En plus des durées proposées : « Autre durée… » pour choisir le nombre de minutes, et « Ajouter 10 minutes » pour prolonger une minuterie en cours.",
             "Dans le lecteur, appuyez sur « Minuterie » et choisissez une durée, ou « À la fin du titre en cours ».",
             "Le temps restant s'affiche sous l'icône. Appuyez à nouveau pour l'arrêter.",
             "À la fin du délai, le son baisse doucement pendant quelques secondes avant la pause.",
