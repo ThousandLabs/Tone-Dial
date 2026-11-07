@@ -15,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -245,6 +246,9 @@ fun AppRoot(vm: MainViewModel) {
         }
     }
 
+    val identifyState by vm.identify.collectAsStateWithLifecycle()
+    identifyState?.let { st -> IdentifyDialog(vm, st) }
+
     menuFor?.let { (song, pl) ->
         SongMenuSheet(vm = vm, nav = nav, song = song, playlist = pl, onDismiss = { menuFor = null }, closePlayer = { flags.playerOpen = false })
     }
@@ -457,6 +461,13 @@ fun SongMenuSheet(
                     })
                     ListItemRow(Icons.Outlined.Edit, "Modifier titre, artiste, album", subtitle = "Sans toucher au fichier", onClick = { dialog = "edit" })
                     ListItemRow(Icons.Outlined.Image, "Pochette", subtitle = "Image de la galerie ou recherche en ligne", onClick = { dialog = "cover" })
+                    val anime = com.thousandlabs.tonedial.data.Covers.looksAnime(song)
+                    ListItemRow(
+                        Icons.Outlined.TravelExplore,
+                        if (anime) "Identifier l'opening" else "Chercher l'artiste en ligne",
+                        subtitle = if (anime) "Trouve la chanson, son interprète et sa pochette" else "Trouve l'artiste et la pochette officielle",
+                        onClick = { vm.identifySong(song); onDismiss() },
+                    )
                     ListItemRow(Icons.Outlined.Info, "Informations", onClick = { dialog = "info" })
                     ListItemRow(Icons.Outlined.DeleteForever, "Supprimer du téléphone", tint = androidx.compose.ui.graphics.Color(0xFFE57373), onClick = {
                         nav.deleteSongs(listOf(song)); onDismiss()
@@ -495,6 +506,64 @@ fun SongInfoDialog(song: Song, plays: Int, onDismiss: () -> Unit) {
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Fermer") } },
+        containerColor = TdColors.Surface,
+    )
+}
+
+
+/** Résultat de « Chercher l'artiste » / « Identifier l'opening ». */
+@Composable
+private fun IdentifyDialog(vm: MainViewModel, st: MainViewModel.IdentifyState) {
+    val r = st.result
+    AlertDialog(
+        onDismissRequest = { vm.dismissIdentify() },
+        title = { Text(if (com.thousandlabs.tonedial.data.Covers.looksAnime(st.song)) "Identifier l'opening" else "Chercher l'artiste") },
+        text = {
+            Column {
+                Text(st.song.title, style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim, maxLines = 2)
+                Spacer(Modifier.height(12.dp))
+                when {
+                    st.loading -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(color = TdColors.Accent, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Text("Recherche en ligne…")
+                    }
+                    r == null || (r.artist.isBlank() && r.image == null) -> Text(
+                        "Rien trouvé. Vérifiez le nom du fichier (par exemple « One Piece Opening 25 - The Peak »), ou corrigez l'artiste à la main avec « Modifier titre, artiste, album ».",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    else -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (r.image != null) {
+                            coil.compose.AsyncImage(
+                                model = r.image,
+                                contentDescription = null,
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                modifier = Modifier.size(72.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp)),
+                            )
+                            Spacer(Modifier.width(14.dp))
+                        }
+                        Column {
+                            if (r.title.isNotBlank()) Text(r.title, style = MaterialTheme.typography.titleMedium)
+                            if (r.artist.isNotBlank()) Text(r.artist, color = TdColors.Accent)
+                            Text("Source : ${r.source}", style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim)
+                        }
+                    }
+                }
+                if (r != null && !st.loading && (r.artist.isNotBlank() || r.image != null)) {
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        "« Appliquer » renseigne l'artiste (le titre reste tel quel), ajoute la pochette et cherche les paroles.",
+                        style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            if (r != null && !st.loading && (r.artist.isNotBlank() || r.image != null)) {
+                TextButton(onClick = { vm.applyIdentity(st.song, r) }) { Text("Appliquer") }
+            }
+        },
+        dismissButton = { TextButton(onClick = { vm.dismissIdentify() }) { Text(if (st.loading) "Annuler" else "Fermer") } },
         containerColor = TdColors.Surface,
     )
 }

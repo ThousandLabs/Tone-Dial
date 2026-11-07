@@ -203,6 +203,80 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun originalSong(song: Song): Song = _allSongs.value.firstOrNull { it.id == song.id } ?: song
 
+    // ---------------- Identification en ligne (« Chercher l'artiste ») ----------------
+    data class IdentifyState(val song: Song, val loading: Boolean, val result: com.thousandlabs.tonedial.data.CoverSearch.Identity?)
+
+    private val _identify = MutableStateFlow<IdentifyState?>(null)
+    val identify: StateFlow<IdentifyState?> = _identify.asStateFlow()
+
+    /** Cherche en ligne la chanson officielle (pour un opening : son vrai titre et son interprète). */
+    fun identifySong(song: Song) {
+        _identify.value = IdentifyState(song, true, null)
+        viewModelScope.launch {
+            val r = runCatching { com.thousandlabs.tonedial.data.CoverSearch.identify(originalSong(song)) }.getOrNull()
+            if (_identify.value?.song?.id == song.id) _identify.value = IdentifyState(song, false, r)
+        }
+    }
+
+    fun dismissIdentify() {
+        _identify.value = null
+    }
+
+    /** Applique le résultat : artiste corrigé (sans toucher au titre), pochette et paroles. */
+    fun applyIdentity(song: Song, id: com.thousandlabs.tonedial.data.CoverSearch.Identity, silent: Boolean = false) {
+        if (id.artist.isNotBlank()) {
+            com.thousandlabs.tonedial.data.LibraryPrefs.setOverride(
+                song.id,
+                com.thousandlabs.tonedial.data.LibraryPrefs.Override(null, id.artist, null),
+            )
+            applyFilters()
+        }
+        viewModelScope.launch {
+            id.image?.let { if (!com.thousandlabs.tonedial.data.Covers.hasCustom(song.id)) com.thousandlabs.tonedial.data.Covers.saveSongImage(song.id, it) }
+            com.thousandlabs.tonedial.data.Covers.markResolved(song.id)
+            if (com.thousandlabs.tonedial.data.UserStore.customLyrics(song.id) == null) {
+                val updated = songMap.value[song.id] ?: song
+                val text = com.thousandlabs.tonedial.data.LyricsOnline.find(updated)
+                if (text != null) com.thousandlabs.tonedial.data.UserStore.setCustomLyrics(song.id, text, source = "lrclib")
+            }
+            lyricsFor = null
+            refreshPlayer()
+            if (!silent) _messages.tryEmit(if (id.artist.isNotBlank()) "Artiste : ${id.artist}" else "Image ajoutée")
+        }
+        _identify.value = null
+    }
+
+    data class AnimeBatch(val running: Boolean = false, val done: Int = 0, val total: Int = 0, val found: Int = 0, val finished: Boolean = false)
+
+    private val _animeBatch = MutableStateFlow(AnimeBatch())
+    val animeBatch: StateFlow<AnimeBatch> = _animeBatch.asStateFlow()
+    private var animeJob: Job? = null
+
+    /** Identifie tous les openings et endings de la bibliothèque et applique leur interprète. */
+    fun identifyAllOpenings() {
+        if (animeJob?.isActive == true) return
+        val list = _songs.value.filter { com.thousandlabs.tonedial.data.Covers.looksAnime(it) }
+        animeJob = viewModelScope.launch {
+            _animeBatch.value = AnimeBatch(running = true, total = list.size)
+            var found = 0
+            list.forEachIndexed { i, song ->
+                val r = runCatching { com.thousandlabs.tonedial.data.CoverSearch.identify(originalSong(song)) }.getOrNull()
+                if (r != null && r.artist.isNotBlank()) {
+                    applyIdentity(song, r, silent = true)
+                    found++
+                }
+                _animeBatch.value = AnimeBatch(running = true, done = i + 1, total = list.size, found = found)
+                delay(700) // MyAnimeList limite le nombre de requêtes
+            }
+            _animeBatch.value = AnimeBatch(done = list.size, total = list.size, found = found, finished = true)
+        }
+    }
+
+    fun stopIdentifyAllOpenings() {
+        animeJob?.cancel()
+        _animeBatch.value = _animeBatch.value.copy(running = false, finished = true)
+    }
+
     // ---------------- Pochettes ----------------
     val coverProgress = com.thousandlabs.tonedial.data.Covers.progress
 

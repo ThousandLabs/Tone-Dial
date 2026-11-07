@@ -920,6 +920,26 @@ fun SettingsScreen(vm: MainViewModel, nav: Nav) {
                         colors = SwitchDefaults.colors(checkedTrackColor = TdColors.Accent, checkedThumbColor = TdColors.Background),
                     )
                 }
+                SectionLabel("Openings et endings")
+                val animeBatch by vm.animeBatch.collectAsStateWithLifecycle()
+                if (animeBatch.running) {
+                    Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                        Text("Identification : ${animeBatch.done} / ${animeBatch.total} · ${animeBatch.found} trouvé(s)", style = MaterialTheme.typography.bodyMedium)
+                        Spacer(Modifier.height(6.dp))
+                        LinearProgressIndicator(
+                            progress = { if (animeBatch.total > 0) animeBatch.done.toFloat() / animeBatch.total else 0f },
+                            modifier = Modifier.fillMaxWidth(), color = TdColors.Accent, trackColor = TdColors.Divider,
+                        )
+                        TextButton(onClick = { vm.stopIdentifyAllOpenings() }) { Text("Arrêter") }
+                    }
+                } else {
+                    ListItemRow(
+                        Icons.Outlined.TravelExplore, "Identifier tous les openings",
+                        subtitle = if (animeBatch.finished) "Terminé : ${animeBatch.found} identifié(s). Appuyez pour relancer."
+                        else "Trouve l'interprète, la pochette et les paroles de chaque opening ou ending (MyAnimeList). Vos titres ne changent pas.",
+                        onClick = { vm.identifyAllOpenings() },
+                    )
+                }
                 SectionLabel("Paroles")
                 LyricsSettings(vm)
                 SectionLabel("Son")

@@ -107,9 +107,14 @@ object CoverSearch {
         val durationSec = (song.duration / 1000).toInt()
 
         // Openings / endings d'anime (ex. « One Piece Opening 25 - The Peak »)
-        val animeMatch = animePattern.find(full) ?: animePattern.find(fileName)
+        // d'abord le nom tel que l'utilisateur l'a écrit (évite « One Piece One Piece Opening 25 »)
+        val rawTitle = TagCleaner.prepare(original.title)
+        val animeMatch = animePattern.find(rawTitle) ?: animePattern.find(TagCleaner.prepare(fileName)) ?: animePattern.find(full)
         if (animeMatch != null) {
-            findAnime(animeMatch.groupValues[1], animeMatch.groupValues[2], animeMatch.groupValues[3].toInt(), song)?.let { return it }
+            // titre de la chanson s'il est donné après le numéro (« … Opening 25 - The Peak »)
+            val src = animeMatch.value.let { m -> listOf(rawTitle, full).firstOrNull { it.contains(m) } ?: rawTitle }
+            val after = src.substringAfter(animeMatch.value, "").trim(' ', '-', '–', '—', ':', '|').ifBlank { null }
+            findAnime(animeMatch.groupValues[1], animeMatch.groupValues[2], animeMatch.groupValues[3].toInt(), song, after)?.let { return it }
         }
 
         // Mots de référence pour valider les résultats (titre, artiste et nom du fichier)
@@ -322,13 +327,14 @@ object CoverSearch {
         return AnimeInfo(a.optInt("mal_id"), poster)
     }
 
-    private val themeEntry = Regex("""^\s*#?(\d+)?:?\s*"(.+?)"\s+by\s+(.+?)\s*(?:\(eps?\b.*)?$""", RegexOption.IGNORE_CASE)
+    // « 25: "The Peak" by Artiste (eps 1100-) » ; guillemets droits ou typographiques, numéro facultatif
+    private val themeEntry = Regex("""^\s*(?:#?(\d+)\s*[:.)]\s*)?["“«]?(.+?)["”»]?\s+by\s+(.+?)\s*(?:\((?:eps?|episodes?|ep)\b.*)?$""", RegexOption.IGNORE_CASE)
 
     /** Retire la version japonaise entre parenthèses : « We Are! (ウィーアー!) » → « We Are! ». */
     private fun stripNative(s: String): String =
         s.replace(Regex("""\s*\([^)]*[^\x00-\x7F][^)]*\)"""), "").trim().ifBlank { s.trim() }
 
-    private suspend fun findAnime(animeName: String, kind: String, number: Int, song: Song): Identity? {
+    private suspend fun findAnime(animeName: String, kind: String, number: Int, song: Song, knownTitle: String? = null): Identity? {
         val name = searchWords(animeName).joinToString(" ")
         if (name.isBlank()) return null
         val isOpening = kind.lowercase().startsWith("o")
@@ -342,7 +348,13 @@ object CoverSearch {
             if (list != null && list.length() > 0) {
                 val entries = (0 until list.length()).map { list.getString(it) }
                 val parsed = entries.mapNotNull { e -> themeEntry.find(e)?.let { m -> Triple(m.groupValues[1].toIntOrNull(), m.groupValues[2], m.groupValues[3]) } }
-                val pick = parsed.firstOrNull { it.first == number } ?: parsed.getOrNull(number - 1)
+                // le titre écrit par l'utilisateur (« The Peak ») est le plus sûr, puis le numéro
+                val known = knownTitle?.let { tokens(it) }.orEmpty()
+                val byTitle = if (known.isEmpty()) null else parsed.firstOrNull { p ->
+                    val t = tokens(stripNative(p.second))
+                    t.isNotEmpty() && known.isNotEmpty() && (t.count { it in known }.toDouble() / t.size) >= 0.75
+                }
+                val pick = byTitle ?: parsed.firstOrNull { it.first == number } ?: parsed.getOrNull(number - 1)
                 if (pick != null) {
                     title = stripNative(pick.second)
                     artist = stripNative(pick.third)

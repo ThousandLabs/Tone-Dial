@@ -87,7 +87,13 @@ object LibraryPrefs {
             title = title,
             artist = artist,
             album = o.album ?: song.album,
-            artists = if (o.artist != null || o.title != null) TagCleaner.artists(artist, title) else song.artists,
+            artists = when {
+                o.artist == null && o.title == null -> song.artists
+                // un opening identifié reste aussi rangé avec son anime
+                o.artist != null && Covers.looksAnime(song) ->
+                    (TagCleaner.artists(artist, title) + song.artists.filter { it != "Artiste inconnu" }).distinctBy { it.lowercase() }
+                else -> TagCleaner.artists(artist, title)
+            },
         )
     }
 }

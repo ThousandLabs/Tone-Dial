@@ -144,6 +144,14 @@ object Covers {
 
     fun hasCustom(songId: Long): Boolean = stamps.containsKey(songName(songId))
 
+    /** Enregistre comme pochette du titre une image trouvée en ligne. */
+    suspend fun saveSongImage(songId: Long, url: String): Boolean = withContext(Dispatchers.IO) {
+        if (!::dir.isInitialized) return@withContext false
+        val bmp = CoverSearch.download(url)?.let { ArtBytes.decode(it, 600) } ?: return@withContext false
+        save(songName(songId), bmp)
+        true
+    }
+
     // ---------- Images des playlists ----------
     private fun playlistName(id: Long) = "playlist_$id.jpg"
 
