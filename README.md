@@ -30,6 +30,7 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 
 ## Nouveautés
 
+- **1.14** : retour à l'icône d'origine (cadran doré), redessinée avec des traits plus épais pour être nette.
 - **1.13** : nouvelle icône nette dans le style Thousand Labs, onglets de l'accueil réorganisables, image personnalisée pour les playlists, paroles recherchées automatiquement dès le début du morceau et recherche groupée, pochettes acceptées pour les clips plus longs que le titre officiel.
 - **1.11** : recherche de pochettes bien plus efficace : Deezer en plus d'iTunes, noms de fichiers abîmés nettoyés, vérification par la durée, openings d'anime (AnimeThemes), faux albums des téléchargeurs détectés, liste des titres sans pochette.
 - **1.10** : dossiers masqués (audios WhatsApp…), correction manuelle titre/artiste/album, pochettes en ligne et depuis la galerie, sauvegarde et restauration, raccourcis d'icône, lecteur à glisser vers le bas, suppression de fichiers, vitesse de lecture, fond du lecteur aux couleurs de la pochette, statistiques d'écoute.
