@@ -268,8 +268,6 @@ object UserStore {
 
     fun getInt(key: String, def: Int) = prefs.getInt(key, def)
     fun putInt(key: String, value: Int) = prefs.edit().putInt(key, value).apply()
-    fun getString(key: String, def: String?): String? = prefs.getString(key, def)
-    fun putString(key: String, value: String) = prefs.edit().putString(key, value).apply()
     fun getBool(key: String, def: Boolean) = prefs.getBoolean(key, def)
     fun putBool(key: String, value: Boolean) = prefs.edit().putBoolean(key, value).apply()
 

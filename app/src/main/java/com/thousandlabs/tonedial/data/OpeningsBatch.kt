@@ -46,7 +46,7 @@ object OpeningsBatch {
     private fun load() {
         if (loaded) return
         loaded = true
-        val raw = UserStore.getString("openings_status", null) ?: return
+        val raw = UserStore.getString("openings_status") ?: return
         val o = runCatching { JSONObject(raw) }.getOrNull() ?: return
         _status.value = o.keys().asSequence().mapNotNull { k ->
             k.toLongOrNull()?.let { id -> id to Status(o.optString(k).ifBlank { null }) }
@@ -72,7 +72,7 @@ object OpeningsBatch {
     }
 
     private fun pending(): List<Long> =
-        UserStore.getString("openings_pending", null)?.split(',')?.mapNotNull { it.toLongOrNull() }.orEmpty()
+        UserStore.getString("openings_pending")?.split(',')?.mapNotNull { it.toLongOrNull() }.orEmpty()
 
     private fun setPending(ids: List<Long>) =
         UserStore.putString("openings_pending", ids.joinToString(","))

@@ -85,7 +85,7 @@ object LyricsBatch {
     /** Reprend une recherche interrompue ; les titres déjà traités sont sautés d'eux-mêmes. */
     fun resumeIfNeeded(context: Context, songs: List<Song>) {
         if (job?.isActive == true) return
-        when (UserStore.getString("lyrics_batch_pending", "")) {
+        when (UserStore.getString("lyrics_batch_pending")) {
             "missing" -> start(context, songs)
             "romaji" -> startRomaji(context, songs)
         }
