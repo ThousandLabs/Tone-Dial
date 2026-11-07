@@ -82,10 +82,15 @@ fun AppRoot(vm: MainViewModel) {
     }
 
     // Revenir en arrière ; la file ouverte depuis le lecteur ramène au lecteur
+    // Mémorise l'état de chaque écran (onglet ouvert, position de défilement) pendant qu'on navigue
+    val screenStates = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+
     fun pop() {
         if (stack.size <= 1) return
         val top = stack.last()
         stack = stack.dropLast(1)
+        // l'écran quitté est oublié, sauf s'il est encore plus bas dans la pile
+        if (top !in stack) screenStates.removeState(top.toString())
         if (top is Screen.Queue && top.fromPlayer) flags.playerOpen = true
     }
 
@@ -198,7 +203,9 @@ fun AppRoot(vm: MainViewModel) {
         ) {
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f)) {
-                    when (val s = stack.last()) {
+                    val shown = stack.last()
+                    screenStates.SaveableStateProvider(shown.toString()) {
+                    when (val s = shown) {
                         Screen.Home -> HomeScreen(vm, nav)
                         is Screen.AlbumDetail -> AlbumDetailScreen(vm, nav, s.id)
                         is Screen.ArtistDetail -> ArtistDetailScreen(vm, nav, s.name)
@@ -215,6 +222,7 @@ fun AppRoot(vm: MainViewModel) {
                         Screen.Settings -> SettingsScreen(vm, nav)
                         Screen.Guide -> GuideScreen(nav)
                         Screen.About -> AboutScreen(nav)
+                    }
                     }
                     if (selection.active) {
                         SelectionBar(vm, selection, onDelete = nav.deleteSongs)

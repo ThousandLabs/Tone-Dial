@@ -30,6 +30,7 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 
 ## Nouveautés
 
+- **1.20** : retour depuis un artiste, un album ou une playlist : l'onglet et la position dans la liste sont conservés.
 - **1.19** : photos des artistes et groupes (Deezer, affiche de l'anime pour les openings), affichées dans l'onglet Artistes et utilisées comme pochette quand un titre n'en a pas.
 - **1.18** : paroles façon karaoké, la ligne chantée se remplit lettre par lettre (exact avec les .lrc enrichis, estimé sinon).
 - **1.17** : nouveau mode « Regrouper, titres intacts » pour l'onglet Artistes, artistes repérés quand plusieurs titres commencent par les mêmes mots, openings rangés par anime.
