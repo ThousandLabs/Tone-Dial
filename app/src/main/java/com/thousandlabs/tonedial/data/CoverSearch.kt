@@ -1,11 +1,14 @@
 package com.thousandlabs.tonedial.data
 
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.text.Normalizer
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Recherche de pochettes tolérante aux noms de fichiers abîmés.
@@ -14,7 +17,8 @@ import java.text.Normalizer
  * 2. Deezer d'abord (recherche souple), iTunes ensuite.
  * 3. Validation par les mots du titre, l'artiste et surtout la durée du morceau.
  * 4. Formulations de plus en plus courtes si rien n'est trouvé.
- * 5. Openings et endings d'anime : AnimeThemes retrouve la vraie chanson, et l'affiche sert de secours.
+ * 5. Openings et endings d'anime : liste intégrée (One Piece, Black Clover), puis MyAnimeList et
+ *    AnimeThemes ; l'affiche de l'anime sert de secours.
  */
 object CoverSearch {
 
@@ -308,9 +312,34 @@ object CoverSearch {
 
     private data class AnimeInfo(val malId: Int, val poster: String?)
 
+    // MyAnimeList (Jikan) accepte environ une requête par seconde : au-delà il répond « 429 » et
+    // l'identification échoue. Les requêtes passent donc une par une, espacées, avec nouvel essai,
+    // et les réponses sont gardées en mémoire (31 openings de One Piece = 2 requêtes, pas 62).
+    private val jikanLock = Mutex()
+    private var lastJikan = 0L
+    private val animeCache = ConcurrentHashMap<String, AnimeInfo>()
+    private val themesCache = ConcurrentHashMap<Int, String>()
+
+    private suspend fun jikan(url: String): String? = jikanLock.withLock {
+        var body: String? = null
+        for (attempt in 0 until 3) {
+            val wait = 1100 - (System.currentTimeMillis() - lastJikan)
+            if (wait > 0) delay(wait)
+            lastJikan = System.currentTimeMillis()
+            val (code, text) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { getWithCode(url) }
+            if (code == 200 && text != null) { body = text; break }
+            // saturé, erreur serveur ou réseau : on patiente puis on réessaie ; autre erreur : abandon
+            if (code != 429 && code !in 500..599 && code != -1) break
+            delay(2500L * (attempt + 1))
+        }
+        body
+    }
+
     /** L'anime le plus connu correspondant au nom (ex. « One Piece » → la série TV). */
     private suspend fun jikanAnime(name: String): AnimeInfo? {
-        val json = getJson("https://api.jikan.moe/v4/anime?limit=6&order_by=members&sort=desc&q=" + enc(name)) ?: return null
+        val cacheKey = norm(name)
+        animeCache[cacheKey]?.let { return it }
+        val json = jikan("https://api.jikan.moe/v4/anime?limit=6&order_by=members&sort=desc&q=" + enc(name)) ?: return null
         val data = runCatching { JSONObject(json).getJSONArray("data") }.getOrNull() ?: return null
         if (data.length() == 0) return null
         val target = norm(name)
@@ -324,8 +353,11 @@ object CoverSearch {
         val poster = a.optJSONObject("images")?.optJSONObject("jpg")?.let { j ->
             j.optString("large_image_url").ifBlank { j.optString("image_url") }
         }?.ifBlank { null }
-        return AnimeInfo(a.optInt("mal_id"), poster)
+        return AnimeInfo(a.optInt("mal_id"), poster).also { if (it.malId > 0) animeCache[cacheKey] = it }
     }
+
+    private suspend fun jikanThemes(malId: Int): String? =
+        themesCache[malId] ?: jikan("https://api.jikan.moe/v4/anime/$malId/themes")?.also { themesCache[malId] = it }
 
     // « 25: "The Peak" by Artiste (eps 1100-) » ; guillemets droits ou typographiques, numéro facultatif
     private val themeEntry = Regex("""^\s*(?:#?(\d+)\s*[:.)]\s*)?["“«]?(.+?)["”»]?\s+by\s+(.+?)\s*(?:\((?:eps?|episodes?|ep)\b.*)?$""", RegexOption.IGNORE_CASE)
@@ -338,10 +370,25 @@ object CoverSearch {
         val name = searchWords(animeName).joinToString(" ")
         if (name.isBlank()) return null
         val isOpening = kind.lowercase().startsWith("o")
+
+        // 1. liste intégrée (One Piece, Black Clover…) : sûre et sans dépendre de MyAnimeList
+        AnimeThemesLocal.find(name, isOpening, number, knownTitle)?.let { local ->
+            val shortTitle = local.title.substringBefore(" (")
+            val artistWords = tokens(local.artist)
+            val reference = tokens("${local.title} ${local.artist} ${song.title} ${song.artist}")
+            // pochette officielle, seulement si Deezer propose bien le même interprète
+            val cover = runCatching {
+                pick(deezer("${local.artist} $shortTitle").filter { c -> tokens(c.artist).any { it in artistWords } }, song, reference, 0, ignoreDuration = true)
+            }.getOrNull()
+            if (cover != null) return Identity(local.title, local.artist, cover.durationSec, cover.image, "liste intégrée, pochette Deezer")
+            val poster = runCatching { jikanAnime(name)?.poster }.getOrNull()
+            return Identity(local.title, local.artist, 0, poster, "liste intégrée")
+        }
+
+        // 2. MyAnimeList pour les autres animes
         val info = runCatching { jikanAnime(name) }.getOrNull()
         if (info != null && info.malId > 0) {
-            delay(400) // limite de Jikan : 3 requêtes par seconde
-            val json = getJson("https://api.jikan.moe/v4/anime/${info.malId}/themes")
+            val json = jikanThemes(info.malId)
             val list = json?.let { runCatching { JSONObject(it).getJSONObject("data").optJSONArray(if (isOpening) "openings" else "endings") }.getOrNull() }
             var title: String? = null
             var artist: String? = null
@@ -457,7 +504,10 @@ object CoverSearch {
 
     private suspend fun getJson(url: String): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { getJsonBlocking(url) }
 
-    private fun getJsonBlocking(url: String): String? = runCatching {
+    private fun getJsonBlocking(url: String): String? = getWithCode(url).let { (code, body) -> if (code == 200) body else null }
+
+    /** Code de réponse HTTP (-1 si le réseau a échoué) et contenu. */
+    private fun getWithCode(url: String): Pair<Int, String?> = runCatching {
         val c = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 8000
             readTimeout = 12000
@@ -465,11 +515,12 @@ object CoverSearch {
             setRequestProperty("Accept", "application/json")
         }
         try {
-            if (c.responseCode != 200) null else c.inputStream.bufferedReader().readText()
+            val code = c.responseCode
+            code to (if (code != 200) null else c.inputStream.bufferedReader().readText())
         } finally {
             c.disconnect()
         }
-    }.getOrNull()
+    }.getOrDefault(-1 to null)
 
     fun download(url: String): ByteArray? = runCatching {
         val c = (URL(url).openConnection() as HttpURLConnection).apply {

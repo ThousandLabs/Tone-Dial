@@ -935,8 +935,12 @@ fun SettingsScreen(vm: MainViewModel, nav: Nav) {
                 } else {
                     ListItemRow(
                         Icons.Outlined.TravelExplore, "Identifier tous les openings",
-                        subtitle = if (animeBatch.finished) "Terminé : ${animeBatch.found} identifié(s). Appuyez pour relancer."
-                        else "Trouve l'interprète, la pochette et les paroles de chaque opening ou ending (MyAnimeList). Vos titres ne changent pas.",
+                        subtitle = if (animeBatch.finished) {
+                            val missing = animeBatch.total - animeBatch.found
+                            "Terminé : ${animeBatch.found} sur ${animeBatch.total} identifié(s)" +
+                                (if (missing > 0) ", $missing à corriger à la main (Modifier titre, artiste, album)." else ".") +
+                                " Appuyez pour relancer."
+                        } else "Trouve l'interprète, la pochette et les paroles de chaque opening ou ending (liste intégrée pour One Piece et Black Clover, MyAnimeList pour les autres). Vos titres ne changent pas.",
                         onClick = { vm.identifyAllOpenings() },
                     )
                 }
