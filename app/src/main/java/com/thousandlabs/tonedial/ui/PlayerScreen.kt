@@ -29,6 +29,7 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -126,7 +127,7 @@ fun PlayerScreen(vm: MainViewModel, nav: Nav, song: Song, ui: PlayerUi, onClose:
                 contentAlignment = Alignment.Center,
             ) {
                 if (showLyrics) {
-                    LyricsPanel(vm, song, ui.positionMs)
+                    LyricsPanel(vm, song, ui.positionMs, ui.isPlaying)
                 } else {
                     ArtworkFill(
                         song.art(),
@@ -276,7 +277,7 @@ private fun SeekBar(ui: PlayerUi, vm: MainViewModel) {
 }
 
 @Composable
-private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long) {
+private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long, isPlaying: Boolean = false) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val lyrics by vm.lyrics.collectAsStateWithLifecycle()
     val loading by vm.lyricsLoading.collectAsStateWithLifecycle()
@@ -284,6 +285,7 @@ private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long) {
     val notFound by vm.lyricsNotFoundOnline.collectAsStateWithLifecycle()
     var editing by remember { mutableStateOf(false) }
     var options by remember { mutableStateOf(false) }
+    var karaoke by remember { mutableStateOf(com.thousandlabs.tonedial.data.UserStore.getBool("lyrics_karaoke", true)) }
 
     if (editing) {
         TextInputDialog(
@@ -368,6 +370,8 @@ private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long) {
             }
             else -> {
                 val state = rememberLazyListState()
+                val speed by vm.speed.collectAsStateWithLifecycle()
+                val smoothPosition = rememberSmoothPosition(positionMs, isPlaying, speed)
                 val activeIndex = if (l.synced) {
                     l.lines.indexOfLast { (it.timeMs ?: 0L) <= positionMs + 300 }.coerceAtLeast(0)
                 } else -1
@@ -381,6 +385,18 @@ private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long) {
                 ) {
                     itemsIndexed(l.lines) { i, line ->
                         val active = i == activeIndex
+                        if (active && karaoke && l.synced && line.timeMs != null && line.text.isNotBlank()) {
+                            KaraokeLine(
+                                line = line,
+                                nextTimeMs = l.lines.getOrNull(i + 1)?.timeMs,
+                                position = smoothPosition,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 6.dp)
+                                    .clickable { vm.seekTo(line.timeMs) },
+                            )
+                            return@itemsIndexed
+                        }
                         Text(
                             line.text.ifBlank { "·" },
                             style = if (l.synced) MaterialTheme.typography.titleMedium.copy(fontSize = 19.sp, lineHeight = 28.sp)
@@ -409,6 +425,17 @@ private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long) {
                                 modifier = Modifier.clickable { options = true }.padding(vertical = 8.dp),
                             )
                             DropdownMenu(expanded = options, onDismissRequest = { options = false }, containerColor = TdColors.SurfaceHigh) {
+                                if (l.synced) {
+                                    DropdownMenuItem(
+                                        text = { Text(if (karaoke) "Surligner par ligne entière" else "Surligner mot par mot") },
+                                        leadingIcon = { Icon(Icons.Outlined.Subject, null) },
+                                        onClick = {
+                                            options = false
+                                            karaoke = !karaoke
+                                            com.thousandlabs.tonedial.data.UserStore.putBool("lyrics_karaoke", karaoke)
+                                        },
+                                    )
+                                }
                                 DropdownMenuItem(
                                     text = { Text("Rechercher d'autres paroles en ligne") },
                                     leadingIcon = { Icon(Icons.Outlined.Search, null) },
@@ -530,4 +557,80 @@ private fun rememberArtColor(song: Song): androidx.compose.ui.graphics.Color {
     }
     val animated by androidx.compose.animation.animateColorAsState(target, label = "artColor")
     return animated
+}
+
+
+/**
+ * Position de lecture lissée image par image (au lieu de 2 à 3 fois par seconde),
+ * pour un remplissage fluide des paroles.
+ */
+@Composable
+private fun rememberSmoothPosition(positionMs: Long, playing: Boolean, speed: Float): androidx.compose.runtime.State<Long> {
+    val state = remember { mutableLongStateOf(positionMs) }
+    LaunchedEffect(positionMs, playing, speed) {
+        state.longValue = positionMs
+        if (!playing) return@LaunchedEffect
+        val start = System.nanoTime()
+        while (true) {
+            androidx.compose.runtime.withFrameNanos { }
+            state.longValue = positionMs + ((System.nanoTime() - start) / 1_000_000f * speed).toLong()
+        }
+    }
+    return state
+}
+
+/**
+ * Ligne en cours façon karaoké : les lettres s'allument au fur et à mesure.
+ * Minutage exact si le fichier .lrc donne l'heure de chaque mot, sinon estimation
+ * à partir du début de la ligne et de celui de la suivante.
+ */
+@Composable
+private fun KaraokeLine(
+    line: com.thousandlabs.tonedial.data.LyricLine,
+    nextTimeMs: Long?,
+    position: androidx.compose.runtime.State<Long>,
+    modifier: Modifier = Modifier,
+) {
+    val text = line.text
+    val start = line.timeMs ?: 0L
+    val pos = position.value
+    val total = text.length
+
+    val lit: Float = run {
+        val words = line.wordTimes
+        if (!words.isNullOrEmpty()) {
+            val end = nextTimeMs ?: (words.last().first + 1500)
+            val k = words.indexOfLast { it.first <= pos }
+            if (k < 0) return@run 0f
+            val (t0, c0) = words[k]
+            val (t1, c1) = words.getOrNull(k + 1) ?: (end to total)
+            val frac = if (t1 > t0) ((pos - t0).toFloat() / (t1 - t0)).coerceIn(0f, 1f) else 1f
+            c0 + frac * (c1 - c0)
+        } else {
+            val letters = text.count { !it.isWhitespace() }.coerceAtLeast(1)
+            val gap = ((nextTimeMs ?: (start + 6000)) - start).coerceAtLeast(400)
+            // durée chantée estimée : on évite d'étaler la ligne sur une longue pause instrumentale
+            val sung = kotlin.math.min(gap * 0.92f, kotlin.math.max(gap * 0.55f, letters * 85f))
+            ((pos - start) / sung).coerceIn(0f, 1f) * total
+        }
+    }
+
+    val litCount = lit.toInt().coerceIn(0, total)
+    val annotated = androidx.compose.ui.text.buildAnnotatedString {
+        withStyle(androidx.compose.ui.text.SpanStyle(color = TdColors.Accent)) { append(text.substring(0, litCount)) }
+        if (litCount < total) {
+            // lettre en cours : couleur intermédiaire pour un passage doux
+            val partial = (lit - litCount).coerceIn(0f, 1f)
+            withStyle(androidx.compose.ui.text.SpanStyle(color = androidx.compose.ui.graphics.lerp(TdColors.Text, TdColors.Accent, partial))) {
+                append(text[litCount])
+            }
+            withStyle(androidx.compose.ui.text.SpanStyle(color = TdColors.Text)) { append(text.substring(litCount + 1)) }
+        }
+    }
+    Text(
+        annotated,
+        style = MaterialTheme.typography.titleMedium.copy(fontSize = 21.sp, lineHeight = 30.sp),
+        fontWeight = FontWeight.Bold,
+        modifier = modifier,
+    )
 }

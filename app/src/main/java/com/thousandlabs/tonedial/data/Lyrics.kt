@@ -8,7 +8,11 @@ import java.io.File
 import java.io.InputStream
 import java.nio.charset.Charset
 
-data class LyricLine(val timeMs: Long?, val text: String)
+/**
+ * Une ligne de paroles. `wordTimes` (format .lrc enrichi, rare) donne pour chaque mot
+ * l'instant où il commence et sa position dans le texte : (temps en ms, index du caractère).
+ */
+data class LyricLine(val timeMs: Long?, val text: String, val wordTimes: List<Pair<Long, Int>>? = null)
 
 data class Lyrics(val lines: List<LyricLine>, val source: String) {
     val synced: Boolean get() = lines.isNotEmpty() && lines.all { it.timeMs != null }
@@ -47,6 +51,27 @@ object LyricsLoader {
         }.getOrNull()?.takeIf { it.lines.isNotEmpty() }
     }
 
+    private val wordTag = Regex("""<(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?>""")
+
+    /** Lit les minutages par mot « <01:23.45>mot » et renvoie le texte sans balises. */
+    private fun parseWordTags(text: String): Pair<String, List<Pair<Long, Int>>?> {
+        if (!text.contains('<')) return text to null
+        val sb = StringBuilder()
+        val times = ArrayList<Pair<Long, Int>>()
+        var last = 0
+        wordTag.findAll(text).forEach { m ->
+            sb.append(text, last, m.range.first)
+            val frac = m.groupValues[3].let { f -> if (f.isEmpty()) 0L else f.padEnd(3, '0').take(3).toLong() }
+            times += (m.groupValues[1].toLong() * 60_000 + m.groupValues[2].toLong() * 1000 + frac) to sb.length
+            last = m.range.last + 1
+        }
+        sb.append(text.substring(last))
+        val clean = sb.toString()
+        val trimmedStart = clean.length - clean.trimStart().length
+        val result = times.map { (t, i) -> t to (i - trimmedStart).coerceIn(0, clean.trim().length) }
+        return clean.trim() to result.takeIf { it.size >= 2 }
+    }
+
     fun parse(raw: String, source: String): Lyrics {
         val lines = ArrayList<LyricLine>()
         var anyTimed = false
@@ -67,7 +92,8 @@ object LyricsLoader {
                         2 -> fracRaw.toLong() * 10
                         else -> fracRaw.take(3).toLong()
                     }
-                    lines += LyricLine(min * 60_000 + sec * 1000 + frac, text)
+                    val (clean, words) = parseWordTags(text)
+                lines += LyricLine(min * 60_000 + sec * 1000 + frac, clean, words)
                 }
             } else {
                 lines += LyricLine(null, trimmed)
