@@ -1,6 +1,7 @@
 package com.thousandlabs.tonedial.data
 
 import android.content.Context
+import com.thousandlabs.tonedial.playback.BatchService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -29,8 +30,10 @@ object LyricsBatch {
     fun start(context: Context, songs: List<Song>) {
         if (job?.isActive == true) return
         val app = context.applicationContext
+        UserStore.putString("lyrics_batch_pending", "missing")
+        _progress.value = Progress(running = true, total = songs.size)
+        BatchService.start(app)
         job = scope.launch {
-            _progress.value = Progress(running = true, total = songs.size)
             var found = 0
             songs.forEachIndexed { i, song ->
                 if (!isActive) return@launch
@@ -45,6 +48,7 @@ object LyricsBatch {
                 }
                 _progress.value = Progress(running = true, done = i + 1, total = songs.size, found = found)
             }
+            UserStore.putString("lyrics_batch_pending", "")
             _progress.value = Progress(done = songs.size, total = songs.size, found = found, finished = true)
         }
     }
@@ -53,13 +57,15 @@ object LyricsBatch {
      * Remplace les paroles en écriture japonaise déjà enregistrées (trouvées sur LRCLIB)
      * par une version romaji quand elle existe. Les paroles collées à la main ne sont pas touchées.
      */
-    fun startRomaji(songs: List<Song>) {
+    fun startRomaji(context: Context, songs: List<Song>) {
         if (job?.isActive == true) return
+        UserStore.putString("lyrics_batch_pending", "romaji")
         val list = songs.filter { s ->
             UserStore.customLyricsSource(s.id) == "lrclib" && UserStore.customLyrics(s.id)?.let { LyricsOnline.isJapanese(it) } == true
         }
+        _progress.value = Progress(running = true, total = list.size)
+        BatchService.start(context.applicationContext)
         job = scope.launch {
-            _progress.value = Progress(running = true, total = list.size)
             var found = 0
             list.forEachIndexed { i, song ->
                 if (!isActive) return@launch
@@ -71,12 +77,23 @@ object LyricsBatch {
                 delay(350)
                 _progress.value = Progress(running = true, done = i + 1, total = list.size, found = found)
             }
+            UserStore.putString("lyrics_batch_pending", "")
             _progress.value = Progress(done = list.size, total = list.size, found = found, finished = true)
+        }
+    }
+
+    /** Reprend une recherche interrompue ; les titres déjà traités sont sautés d'eux-mêmes. */
+    fun resumeIfNeeded(context: Context, songs: List<Song>) {
+        if (job?.isActive == true) return
+        when (UserStore.getString("lyrics_batch_pending", "")) {
+            "missing" -> start(context, songs)
+            "romaji" -> startRomaji(context, songs)
         }
     }
 
     fun stop() {
         job?.cancel()
+        UserStore.putString("lyrics_batch_pending", "")
         _progress.value = _progress.value.copy(running = false, finished = true)
     }
 }

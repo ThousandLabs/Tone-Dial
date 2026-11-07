@@ -925,6 +925,7 @@ fun SettingsScreen(vm: MainViewModel, nav: Nav) {
                 if (animeBatch.running) {
                     Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
                         Text("Identification : ${animeBatch.done} / ${animeBatch.total} · ${animeBatch.found} trouvé(s)", style = MaterialTheme.typography.bodyMedium)
+                        Text("Elle continue si vous quittez l'appli (notification de progression).", style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim)
                         Spacer(Modifier.height(6.dp))
                         LinearProgressIndicator(
                             progress = { if (animeBatch.total > 0) animeBatch.done.toFloat() / animeBatch.total else 0f },
@@ -944,6 +945,11 @@ fun SettingsScreen(vm: MainViewModel, nav: Nav) {
                         onClick = { vm.identifyAllOpenings() },
                     )
                 }
+                ListItemRow(
+                    Icons.Outlined.FactCheck, "Voir les openings identifiés",
+                    subtitle = "Liste des openings et endings identifiés, non trouvés ou pas encore cherchés.",
+                    onClick = { nav.go(Screen.OpeningsStatus) },
+                )
                 SectionLabel("Paroles")
                 LyricsSettings(vm)
                 SectionLabel("Son")

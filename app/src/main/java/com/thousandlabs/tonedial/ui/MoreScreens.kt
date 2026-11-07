@@ -4,6 +4,7 @@ package com.thousandlabs.tonedial.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -320,6 +321,105 @@ fun MissingCoversScreen(vm: MainViewModel, nav: Nav) {
                     }
                     IconButton(onClick = { vm.searchCover(song) }) { Icon(Icons.Outlined.ImageSearch, "Chercher en ligne", tint = TdColors.Text) }
                     IconButton(onClick = { nav.pickCover(song) }) { Icon(Icons.Outlined.AddPhotoAlternate, "Choisir dans la galerie", tint = TdColors.Accent) }
+                }
+            }
+        }
+    }
+}
+
+private enum class OpeningFilter(val label: String) { Found("Identifiés"), Missing("Non trouvés"), Pending("Pas encore cherchés") }
+
+/** Openings et endings : lesquels sont déjà identifiés, lesquels restent à faire. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun OpeningsStatusScreen(vm: MainViewModel, nav: Nav) {
+    val status by vm.openingsStatus.collectAsStateWithLifecycle()
+    val songs by vm.songs.collectAsStateWithLifecycle()
+    val batch by vm.animeBatch.collectAsStateWithLifecycle()
+    val groups = remember(status, songs) {
+        songs.filter { com.thousandlabs.tonedial.data.Covers.looksAnime(it) }
+            .sortedBy { it.title.lowercase() }
+            .groupBy { s ->
+                val st = status[s.id]
+                when {
+                    st?.artist != null || vm.hasOverride(s) -> OpeningFilter.Found
+                    st != null -> OpeningFilter.Missing
+                    else -> OpeningFilter.Pending
+                }
+            }
+    }
+    var filter by remember { mutableStateOf(OpeningFilter.Found) }
+    val list = groups[filter].orEmpty()
+    Column(Modifier.fillMaxSize()) {
+        BackTopBar("Openings identifiés", nav.back)
+        if (batch.running) {
+            Text(
+                "Identification en cours : ${batch.done} / ${batch.total}. La liste se met à jour au fur et à mesure.",
+                style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+            )
+        }
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 16.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OpeningFilter.entries.forEach { f ->
+                FilterChip(
+                    selected = filter == f,
+                    onClick = { filter = f },
+                    label = { Text("${f.label} (${groups[f].orEmpty().size})", maxLines = 1) },
+                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = TdColors.Accent, selectedLabelColor = TdColors.Background),
+                )
+            }
+        }
+        if (list.isEmpty()) {
+            EmptyState(
+                Icons.Outlined.TravelExplore,
+                when (filter) {
+                    OpeningFilter.Found -> "Aucun opening identifié"
+                    OpeningFilter.Missing -> "Aucun échec"
+                    OpeningFilter.Pending -> "Tout a été cherché"
+                },
+                when (filter) {
+                    OpeningFilter.Found -> "Lancez « Identifier tous les openings » dans les réglages."
+                    OpeningFilter.Missing -> "Tous les openings cherchés ont été trouvés."
+                    OpeningFilter.Pending -> "Chaque opening a déjà été cherché au moins une fois."
+                },
+            )
+            return@Column
+        }
+        if (filter == OpeningFilter.Missing) {
+            Text(
+                "Vérifiez le nom du fichier (« One Piece Opening 25 - The Peak »), relancez la recherche avec la loupe, ou corrigez l'artiste depuis le menu du titre.",
+                style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+            )
+        }
+        LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+            items(list, key = { it.id }) { song ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { nav.openMenu(song, null) }
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Artwork(song.art(), size = 46.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
+                        val artist = status[song.id]?.artist ?: song.artist
+                        Text(
+                            if (filter == OpeningFilter.Found) artist else song.artist,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall,
+                            color = if (filter == OpeningFilter.Found) TdColors.Accent else TdColors.TextDim,
+                        )
+                    }
+                    if (filter == OpeningFilter.Found) {
+                        Icon(Icons.Outlined.CheckCircle, "Identifié", tint = TdColors.Accent, modifier = Modifier.size(20.dp))
+                    } else {
+                        IconButton(onClick = { vm.identifySong(song) }) { Icon(Icons.Outlined.TravelExplore, "Identifier l'opening", tint = TdColors.Text) }
+                    }
                 }
             }
         }

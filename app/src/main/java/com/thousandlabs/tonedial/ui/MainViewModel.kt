@@ -125,6 +125,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         connect()
+        com.thousandlabs.tonedial.data.OpeningsBatch.statusMap()
+        // artiste appliqué par l'identification groupée : listes et lecteur mis à jour
+        viewModelScope.launch {
+            com.thousandlabs.tonedial.data.OpeningsBatch.applied.collect {
+                applyFilters()
+                lyricsFor = null
+                refreshPlayer()
+            }
+        }
     }
 
     // ---------------- Bibliothèque ----------------
@@ -150,6 +159,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             tryRestore()
             refreshPlayer()
+            // recherches groupées interrompues (appli fermée de force…) : elles reprennent
+            com.thousandlabs.tonedial.data.OpeningsBatch.resumeIfNeeded(ctx, visibleOriginals())
+            com.thousandlabs.tonedial.data.LyricsBatch.resumeIfNeeded(ctx, _songs.value)
         }
     }
 
@@ -229,6 +241,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 song.id,
                 com.thousandlabs.tonedial.data.LibraryPrefs.Override(null, id.artist, null),
             )
+            if (com.thousandlabs.tonedial.data.Covers.looksAnime(song)) com.thousandlabs.tonedial.data.OpeningsBatch.mark(song.id, id.artist)
             applyFilters()
         }
         viewModelScope.launch {
@@ -246,36 +259,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _identify.value = null
     }
 
-    data class AnimeBatch(val running: Boolean = false, val done: Int = 0, val total: Int = 0, val found: Int = 0, val finished: Boolean = false)
+    /** Identification groupée : tourne hors de l'écran (service avec notification), voir OpeningsBatch. */
+    val animeBatch = com.thousandlabs.tonedial.data.OpeningsBatch.progress
+    val openingsStatus = com.thousandlabs.tonedial.data.OpeningsBatch.status
 
-    private val _animeBatch = MutableStateFlow(AnimeBatch())
-    val animeBatch: StateFlow<AnimeBatch> = _animeBatch.asStateFlow()
-    private var animeJob: Job? = null
+    /** Openings et endings visibles, sous leur nom d'origine (celui que lit la recherche). */
+    private fun visibleOriginals(): List<Song> {
+        val visible = _songs.value.map { it.id }.toSet()
+        return _allSongs.value.filter { it.id in visible }
+    }
 
     /** Identifie tous les openings et endings de la bibliothèque et applique leur interprète. */
-    fun identifyAllOpenings() {
-        if (animeJob?.isActive == true) return
-        val list = _songs.value.filter { com.thousandlabs.tonedial.data.Covers.looksAnime(it) }
-        animeJob = viewModelScope.launch {
-            _animeBatch.value = AnimeBatch(running = true, total = list.size)
-            var found = 0
-            list.forEachIndexed { i, song ->
-                val r = runCatching { com.thousandlabs.tonedial.data.CoverSearch.identify(originalSong(song)) }.getOrNull()
-                if (r != null && r.artist.isNotBlank()) {
-                    applyIdentity(song, r, silent = true)
-                    found++
-                }
-                _animeBatch.value = AnimeBatch(running = true, done = i + 1, total = list.size, found = found)
-                delay(700) // MyAnimeList limite le nombre de requêtes
-            }
-            _animeBatch.value = AnimeBatch(done = list.size, total = list.size, found = found, finished = true)
-        }
-    }
+    fun identifyAllOpenings() = com.thousandlabs.tonedial.data.OpeningsBatch.start(ctx, visibleOriginals())
 
-    fun stopIdentifyAllOpenings() {
-        animeJob?.cancel()
-        _animeBatch.value = _animeBatch.value.copy(running = false, finished = true)
-    }
+    fun stopIdentifyAllOpenings() = com.thousandlabs.tonedial.data.OpeningsBatch.stop()
+
+    /** Openings et endings de la bibliothèque, avec l'artiste affiché. */
+    fun animeSongs(): List<Song> = _songs.value.filter { com.thousandlabs.tonedial.data.Covers.looksAnime(it) }
 
     // ---------------- Pochettes ----------------
     val coverProgress = com.thousandlabs.tonedial.data.Covers.progress
@@ -854,7 +854,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun stopLyricsBatch() = com.thousandlabs.tonedial.data.LyricsBatch.stop()
     fun startRomajiBatch() {
         lyricsFor = null
-        com.thousandlabs.tonedial.data.LyricsBatch.startRomaji(_allSongs.value)
+        com.thousandlabs.tonedial.data.LyricsBatch.startRomaji(ctx, _allSongs.value)
     }
 
     private val _lyricsSearching = MutableStateFlow(false)
