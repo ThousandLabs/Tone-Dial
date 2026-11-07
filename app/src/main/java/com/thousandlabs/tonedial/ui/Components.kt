@@ -83,7 +83,7 @@ fun Artwork(
         val coverVersion by com.thousandlabs.tonedial.data.Covers.version.collectAsState()
         if (art != null) {
             val model = remember(art, coverVersion) {
-                if (art is SongArt) art.copy(stamp = com.thousandlabs.tonedial.data.Covers.stamp(art.songId, art.albumId)) else art
+                if (art is SongArt) art.copy(stamp = com.thousandlabs.tonedial.data.Covers.stamp(art.songId, art.albumId, art.artist)) else art
             }
             AsyncImage(
                 model = model,
@@ -107,7 +107,7 @@ fun ArtworkFill(art: Any?, modifier: Modifier = Modifier, corner: Dp = 12.dp, pl
         val coverVersion by com.thousandlabs.tonedial.data.Covers.version.collectAsState()
         if (art != null) {
             val model = remember(art, coverVersion) {
-                if (art is SongArt) art.copy(stamp = com.thousandlabs.tonedial.data.Covers.stamp(art.songId, art.albumId)) else art
+                if (art is SongArt) art.copy(stamp = com.thousandlabs.tonedial.data.Covers.stamp(art.songId, art.albumId, art.artist)) else art
             }
             AsyncImage(model = model, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         }

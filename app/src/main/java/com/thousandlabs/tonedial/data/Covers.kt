@@ -50,8 +50,72 @@ object Covers {
     private fun songName(id: Long) = "song_$id.jpg"
     private fun albumName(id: Long) = "album_$id.jpg"
 
-    fun stamp(songId: Long, albumId: Long): Long =
-        (stamps[songName(songId)] ?: 0L) + (stamps[albumName(albumId)] ?: 0L)
+    fun stamp(songId: Long, albumId: Long, artist: String? = null): Long =
+        (stamps[songName(songId)] ?: 0L) + (stamps[albumName(albumId)] ?: 0L) +
+            (artist?.let { stamps[artistFileName(it)] } ?: 0L)
+
+    // ---------- Images des artistes ----------
+    private fun artistFileName(name: String): String {
+        val md = java.security.MessageDigest.getInstance("MD5").digest(name.trim().lowercase().toByteArray())
+        return "artist_" + md.joinToString("") { "%02x".format(it) }.take(16) + ".jpg"
+    }
+
+    fun artistFile(name: String): File? {
+        if (!::dir.isInitialized || name == "Artiste inconnu") return null
+        val n = artistFileName(name)
+        if (!stamps.containsKey(n)) return null
+        return File(dir, n).takeIf { it.exists() }
+    }
+
+    fun artistBytes(name: String): ByteArray? = artistFile(name)?.let { runCatching { it.readBytes() }.getOrNull() }
+
+    private val artistFailed: MutableSet<String> by lazy {
+        val set = ConcurrentHashMap.newKeySet<String>()
+        runCatching {
+            val a = org.json.JSONArray(UserStore.getString("artist_img_failed") ?: "[]")
+            for (i in 0 until a.length()) set += a.getString(i)
+        }
+        set
+    }
+
+    private fun saveArtistFailed() {
+        UserStore.putString("artist_img_failed", org.json.JSONArray(artistFailed.toList()).toString())
+    }
+
+    /** Cherche et enregistre l'image d'un artiste ou d'un groupe. */
+    suspend fun fetchArtistImage(name: String, isAnime: Boolean = false, force: Boolean = false): Boolean = withContext(Dispatchers.IO) {
+        if (!::dir.isInitialized || name == "Artiste inconnu" || name.length < 2) return@withContext false
+        if (artistFile(name) != null) return@withContext true
+        val key = name.trim().lowercase()
+        if (!force && key in artistFailed) return@withContext false
+        val url = runCatching { CoverSearch.artistImage(name, isAnime) }.getOrNull()
+        val bmp = url?.let { CoverSearch.download(it) }?.let { ArtBytes.decode(it, 600) }
+        if (bmp == null) {
+            artistFailed += key
+            saveArtistFailed()
+            return@withContext false
+        }
+        save(artistFileName(name), bmp)
+        artistFailed -= key
+        true
+    }
+
+    private var artistJob: Job? = null
+
+    /** Complète en arrière-plan les images manquantes d'une liste d'artistes. */
+    fun fetchArtistImages(artists: List<Pair<String, Boolean>>, force: Boolean = false) {
+        if (!autoEnabled() && !force) return
+        if (artistJob?.isActive == true) return
+        artistJob = scope.launch {
+            artists.distinctBy { it.first.lowercase() }.forEach { (name, anime) ->
+                if (!isActive) return@launch
+                if (artistFile(name) == null && (force || name.trim().lowercase() !in artistFailed)) {
+                    fetchArtistImage(name, anime, force)
+                    delay(300)
+                }
+            }
+        }
+    }
 
     /** Image ajoutée par l'appli pour ce titre ou son album, si elle existe. */
     fun localBytes(songId: Long, albumId: Long): ByteArray? {
@@ -206,6 +270,10 @@ object Covers {
                 val albumSongs = library.filter { it.albumId == song.albumId }
                 fetchOnline(song, realAlbum = albumSongs.isNotEmpty() && isRealAlbum(albumSongs))
             }
+            // image de l'artiste, utilisée quand un titre n'a pas de pochette
+            song.artists.filter { it != "Artiste inconnu" }.take(2).forEach { a ->
+                if (artistFile(a) == null) fetchArtistImage(a, isAnime = looksAnime(song))
+            }
         }
     }
 
@@ -234,8 +302,24 @@ object Covers {
             }
             _progress.value = Progress(running = false, done = tasks.size, total = tasks.size, found = found, finished = true, missing = missing.toList())
             saveMissing(missing)
+            // puis les images des artistes (nouvel essai pour ceux qui avaient échoué)
+            artistFailed.clear()
+            val artists = songs.flatMap { s -> s.artists.filter { it != "Artiste inconnu" }.map { it to looksAnime(s) } }
+            artists.distinctBy { it.first.lowercase() }.forEach { (name, anime) ->
+                if (!isActive) return@launch
+                if (artistFile(name) == null) {
+                    fetchArtistImage(name, anime, force = true)
+                    delay(300)
+                }
+            }
         }
     }
+
+    private val animeWords = Regex("""\b(opening|op|ending|ed)\s*\d{1,3}\b""", RegexOption.IGNORE_CASE)
+
+    /** Le titre est-il un opening ou un ending d'anime ? */
+    fun looksAnime(song: Song): Boolean =
+        animeWords.containsMatchIn(song.title) || animeWords.containsMatchIn(song.path.substringAfterLast('/'))
 
     fun stopBatch() {
         job?.cancel()

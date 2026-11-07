@@ -179,6 +179,58 @@ object CoverSearch {
     }
 
     // ------------------------------------------------------------------
+    // Images d'artistes
+    // ------------------------------------------------------------------
+
+    /** Photo d'un artiste ou d'un groupe (Deezer), ou affiche de l'anime pour les openings. */
+    suspend fun artistImage(name: String, isAnime: Boolean): String? {
+        val target = norm(name)
+        if (target.isBlank()) return null
+        val json = getJson("https://api.deezer.com/search/artist?limit=5&q=" + enc(name))
+        val data = json?.let { runCatching { JSONObject(it).optJSONArray("data") }.getOrNull() }
+        if (data != null) {
+            for (i in 0 until data.length()) {
+                val a = data.getJSONObject(i)
+                val n = norm(a.optString("name"))
+                val match = n == target || (target.length >= 4 && (n.replace(" ", "") == target.replace(" ", "")))
+                if (!match) continue
+                val pic = a.optString("picture_xl").ifBlank { a.optString("picture_big") }
+                // Deezer renvoie une silhouette vide quand l'artiste n'a pas de photo
+                if (pic.isBlank() || pic.contains("/artist//")) continue
+                return pic
+            }
+        }
+        if (isAnime) return animePoster(name)
+        return null
+    }
+
+    /** Affiche d'un anime (AnimeThemes). */
+    private suspend fun animePoster(animeName: String): String? {
+        val name = searchWords(animeName).joinToString(" ").ifBlank { return null }
+        val urls = listOf(
+            "https://api.animethemes.moe/search?q=${enc(name)}&fields[search]=anime&include[anime]=images",
+            "https://api.animethemes.moe/anime?q=${enc(name)}&include=images&page[size]=1",
+            "https://api.animethemes.moe/api/anime?filter[search]=${enc(name)}&include=images&page[size]=1",
+        )
+        for (u in urls) {
+            val json = getJson(u) ?: continue
+            val root = runCatching { JSONObject(json) }.getOrNull() ?: continue
+            val list = root.optJSONObject("search")?.optJSONArray("anime") ?: root.optJSONArray("anime") ?: continue
+            if (list.length() == 0) continue
+            val imgs = list.getJSONObject(0).optJSONArray("images") ?: continue
+            var any: String? = null
+            for (i in 0 until imgs.length()) {
+                val im = imgs.getJSONObject(i)
+                val link = im.optString("link").ifBlank { null } ?: continue
+                if (im.optString("facet").contains("Large", true)) return link
+                if (any == null) any = link
+            }
+            if (any != null) return any
+        }
+        return null
+    }
+
+    // ------------------------------------------------------------------
     // Sources
     // ------------------------------------------------------------------
 

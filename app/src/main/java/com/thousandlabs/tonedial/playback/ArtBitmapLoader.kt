@@ -27,10 +27,11 @@ class ArtBitmapLoader(context: Context) : BitmapLoader {
         const val SCHEME = "tonedial"
 
         /** Adresse interne de la pochette d'un titre. */
-        fun artUri(songId: Long, albumId: Long): Uri =
+        fun artUri(songId: Long, albumId: Long, artist: String? = null): Uri =
             Uri.Builder().scheme(SCHEME).authority("art")
                 .appendQueryParameter("song", songId.toString())
                 .appendQueryParameter("album", albumId.toString())
+                .apply { if (artist != null) appendQueryParameter("artist", artist) }
                 .build()
     }
 
@@ -51,6 +52,7 @@ class ArtBitmapLoader(context: Context) : BitmapLoader {
             val song = uri.getQueryParameter("song")?.toLongOrNull() ?: -1L
             val album = uri.getQueryParameter("album")?.toLongOrNull() ?: -1L
             ArtBytes.load(app, song, album)
+                ?: uri.getQueryParameter("artist")?.let { com.thousandlabs.tonedial.data.Covers.artistBytes(it) }
         } else {
             runCatching { app.contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
         }

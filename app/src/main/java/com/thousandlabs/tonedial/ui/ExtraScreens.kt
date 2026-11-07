@@ -204,6 +204,7 @@ private val guide = listOf(
             "Les openings et endings d'anime (« One Piece Opening 25 - The Peak ») sont reconnus : l'appli retrouve la chanson officielle, ou à défaut utilise l'affiche de l'anime.",
             "Pour tout compléter d'un coup : Menu > Réglages > « Rechercher toutes les pochettes manquantes ». À la fin, « Titres sans pochette » liste ceux qui restent : choisissez une image dans la galerie ou relancez la recherche pour un titre.",
             "Pour choisir vous-même : menu du titre > Pochette > « Choisir une image » dans la galerie, ou « Chercher la pochette en ligne ».",
+            "Les artistes et groupes reconnus reçoivent leur photo (Deezer, ou l'affiche de l'anime pour les openings). Elle s'affiche dans l'onglet Artistes, et remplace automatiquement la pochette d'un titre qui n'en a pas : partout dans l'appli, dans la notification et sur l'écran verrouillé.",
             "Le fond du lecteur prend les couleurs de la pochette du titre en cours.",
         ),
     ),

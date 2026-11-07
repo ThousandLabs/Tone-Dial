@@ -519,7 +519,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     .setTitle(title)
                     .setArtist(artist)
                     .setAlbumTitle(album)
-                    .setArtworkUri(com.thousandlabs.tonedial.playback.ArtBitmapLoader.artUri(id, albumId))
+                    .setArtworkUri(com.thousandlabs.tonedial.playback.ArtBitmapLoader.artUri(id, albumId, artists.firstOrNull()?.takeUnless { it == "Artiste inconnu" }))
                     .setIsPlayable(true)
                     .setIsBrowsable(false)
                     .build()

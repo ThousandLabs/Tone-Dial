@@ -13,10 +13,17 @@ import coil.key.Keyer
 import coil.request.Options
 
 /** Pochette d'un morceau : image de l'album, sinon image intégrée au fichier. */
-data class SongArt(val songId: Long, val albumId: Long, val stamp: Long = 0L)
+data class SongArt(val songId: Long, val albumId: Long, val stamp: Long = 0L, val artist: String? = null)
 
-fun Song.art() = SongArt(id, albumId, Covers.stamp(id, albumId))
-fun Album.art() = (songs.firstOrNull()?.id ?: -1L).let { SongArt(it, id, Covers.stamp(it, id)) }
+private fun Song.mainArtist(): String? = artists.firstOrNull()?.takeUnless { it == "Artiste inconnu" }
+
+fun Song.art() = mainArtist().let { a -> SongArt(id, albumId, Covers.stamp(id, albumId, a), a) }
+fun Album.art(): SongArt {
+    val first = songs.firstOrNull()
+    val a = first?.artists?.firstOrNull()?.takeUnless { it == "Artiste inconnu" }
+    val sid = first?.id ?: -1L
+    return SongArt(sid, id, Covers.stamp(sid, id, a), a)
+}
 
 class SongArtKeyer : Keyer<SongArt> {
     override fun key(data: SongArt, options: Options): String = "art_${data.albumId}_${data.songId}_${data.stamp}"
@@ -26,7 +33,10 @@ class SongArtFetcher(private val data: SongArt, private val options: Options) : 
 
     override suspend fun fetch(): FetchResult? {
         val context = options.context
-        val bytes = ArtBytes.load(context, data.songId, data.albumId) ?: return null
+        // pochette du titre, sinon image de l'artiste
+        val bytes = ArtBytes.load(context, data.songId, data.albumId)
+            ?: data.artist?.let { Covers.artistBytes(it) }
+            ?: return null
         val bitmap = ArtBytes.decode(bytes, 600) ?: return null
         return DrawableResult(
             drawable = BitmapDrawable(context.resources, bitmap),

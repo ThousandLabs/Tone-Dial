@@ -277,10 +277,17 @@ private fun ArtistsTab(vm: MainViewModel, nav: Nav) {
         EmptyState(Icons.Outlined.Person, "Aucun artiste", "Les artistes apparaîtront ici.")
         return
     }
+    // complète en arrière-plan les photos d'artistes manquantes
+    LaunchedEffect(artists.size) {
+        com.thousandlabs.tonedial.data.Covers.fetchArtistImages(
+            artists.filter { it.name != "Artiste inconnu" }.map { a -> a.name to a.songs.any { com.thousandlabs.tonedial.data.Covers.looksAnime(it) } }
+        )
+    }
+    val coverVersion by com.thousandlabs.tonedial.data.Covers.version.collectAsStateWithLifecycle()
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
         items(artists, key = { it.name }) { a ->
             CollectionRow(
-                art = a.songs.firstOrNull()?.art(),
+                art = remember(a.name, coverVersion) { com.thousandlabs.tonedial.data.Covers.artistFile(a.name) } ?: a.songs.firstOrNull()?.art(),
                 placeholder = Icons.Outlined.Person,
                 circle = true,
                 title = a.name,
@@ -513,7 +520,7 @@ fun ArtistDetailScreen(vm: MainViewModel, nav: Nav, name: String) {
     SongCollectionScreen(
         vm, nav, artist.name,
         "${artist.albumCount} album(s) · ${pluralTitles(artist.songs.size)} · ${totalDuration(artist.songs)}",
-        artist.songs.firstOrNull()?.art(), Icons.Outlined.Person, artist.songs,
+        (com.thousandlabs.tonedial.data.Covers.artistFile(artist.name) ?: artist.songs.firstOrNull()?.art()), Icons.Outlined.Person, artist.songs,
     )
 }
 
@@ -783,7 +790,7 @@ fun SearchScreen(vm: MainViewModel, nav: Nav) {
             if (foundArtists.isNotEmpty()) {
                 item { SectionLabel("Artistes") }
                 items(foundArtists, key = { "ar_" + it.name }) { a ->
-                    CollectionRow(a.songs.firstOrNull()?.art(), Icons.Outlined.Person, a.name, pluralTitles(a.songs.size),
+                    CollectionRow(com.thousandlabs.tonedial.data.Covers.artistFile(a.name) ?: a.songs.firstOrNull()?.art(), Icons.Outlined.Person, a.name, pluralTitles(a.songs.size),
                         onClick = { nav.go(Screen.ArtistDetail(a.name)) }, circle = true)
                 }
             }

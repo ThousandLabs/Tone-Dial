@@ -30,6 +30,7 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 
 ## Nouveautés
 
+- **1.19** : photos des artistes et groupes (Deezer, affiche de l'anime pour les openings), affichées dans l'onglet Artistes et utilisées comme pochette quand un titre n'en a pas.
 - **1.18** : paroles façon karaoké, la ligne chantée se remplit lettre par lettre (exact avec les .lrc enrichis, estimé sinon).
 - **1.17** : nouveau mode « Regrouper, titres intacts » pour l'onglet Artistes, artistes repérés quand plusieurs titres commencent par les mêmes mots, openings rangés par anime.
 - **1.16** : noms de fichiers collés reconnus (« AJR-World'sSmallestViolin(OfficialVideo)_567 »), recherche de pochettes et de paroles indépendante du réglage d'affichage des artistes.
