@@ -49,6 +49,32 @@ object LyricsBatch {
         }
     }
 
+    /**
+     * Remplace les paroles en écriture japonaise déjà enregistrées (trouvées sur LRCLIB)
+     * par une version romaji quand elle existe. Les paroles collées à la main ne sont pas touchées.
+     */
+    fun startRomaji(songs: List<Song>) {
+        if (job?.isActive == true) return
+        val list = songs.filter { s ->
+            UserStore.customLyricsSource(s.id) == "lrclib" && UserStore.customLyrics(s.id)?.let { LyricsOnline.isJapanese(it) } == true
+        }
+        job = scope.launch {
+            _progress.value = Progress(running = true, total = list.size)
+            var found = 0
+            list.forEachIndexed { i, song ->
+                if (!isActive) return@launch
+                val text = LyricsOnline.find(song)
+                if (text != null && LyricsOnline.looksRomaji(text)) {
+                    UserStore.setCustomLyrics(song.id, text, source = "lrclib")
+                    found++
+                }
+                delay(350)
+                _progress.value = Progress(running = true, done = i + 1, total = list.size, found = found)
+            }
+            _progress.value = Progress(done = list.size, total = list.size, found = found, finished = true)
+        }
+    }
+
     fun stop() {
         job?.cancel()
         _progress.value = _progress.value.copy(running = false, finished = true)

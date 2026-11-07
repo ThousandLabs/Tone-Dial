@@ -1232,6 +1232,33 @@ private fun LyricsSettings(vm: MainViewModel) {
             colors = SwitchDefaults.colors(checkedTrackColor = TdColors.Accent, checkedThumbColor = TdColors.Background),
         )
     }
+    var romaji by remember { mutableStateOf(com.thousandlabs.tonedial.data.LyricsOnline.preferRomaji()) }
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Outlined.Translate, null, tint = TdColors.Text, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(18.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Paroles japonaises en romaji", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "Pour les chansons japonaises, l'appli choisit en priorité une version des paroles déjà écrite en lettres latines sur LRCLIB (« saikō no… »). Si aucune n'existe, elle garde l'écriture japonaise.",
+                style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim,
+            )
+        }
+        Switch(
+            checked = romaji,
+            onCheckedChange = { romaji = it; com.thousandlabs.tonedial.data.LyricsOnline.setPreferRomaji(it) },
+            colors = SwitchDefaults.colors(checkedTrackColor = TdColors.Accent, checkedThumbColor = TdColors.Background),
+        )
+    }
+    if (romaji && !progress.running) {
+        ListItemRow(
+            Icons.Outlined.Translate, "Passer les paroles japonaises en romaji",
+            subtitle = "Pour les paroles japonaises déjà enregistrées : cherche leur version romaji et la met à la place quand elle existe. Les paroles collées à la main ne changent pas.",
+            onClick = { vm.startRomajiBatch() },
+        )
+    }
     if (progress.running) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
             Text("Recherche des paroles : ${progress.done} / ${progress.total} · ${progress.found} trouvée(s)", style = MaterialTheme.typography.bodyMedium)

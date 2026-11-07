@@ -852,6 +852,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val lyricsBatch = com.thousandlabs.tonedial.data.LyricsBatch.progress
     fun startLyricsBatch() = com.thousandlabs.tonedial.data.LyricsBatch.start(ctx, _songs.value)
     fun stopLyricsBatch() = com.thousandlabs.tonedial.data.LyricsBatch.stop()
+    fun startRomajiBatch() {
+        lyricsFor = null
+        com.thousandlabs.tonedial.data.LyricsBatch.startRomaji(_allSongs.value)
+    }
 
     private val _lyricsSearching = MutableStateFlow(false)
     val lyricsSearching: StateFlow<Boolean> = _lyricsSearching.asStateFlow()

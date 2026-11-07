@@ -17,6 +17,44 @@ object LyricsOnline {
     private const val BASE = "https://lrclib.net/api"
     private val featPart = Regex("""\s*[(\[]\s*(?:feat\.?|ft\.?|featuring|with)\s+[^)\]]*[)\]]""", RegexOption.IGNORE_CASE)
 
+    // ---------- Romaji ----------
+
+    /** Réglage : préférer les paroles japonaises transcrites en lettres latines (romaji). */
+    fun preferRomaji(): Boolean = UserStore.getBool("lyrics_romaji", true)
+    fun setPreferRomaji(on: Boolean) = UserStore.putBool("lyrics_romaji", on)
+
+    private val timeTag = Regex("""\[[0-9:.]+\]|<[0-9:.]+>""")
+
+    /** Paroles écrites en japonais (kana ou kanji) plutôt qu'en lettres latines ? */
+    fun isJapanese(text: String): Boolean {
+        val t = timeTag.replace(text, "")
+        var jp = 0
+        var latin = 0
+        for (c in t) {
+            when {
+                c in '\u3040'..'\u30FF' || c in '\u4E00'..'\u9FFF' || c in '\uFF66'..'\uFF9F' -> jp++
+                c in 'a'..'z' || c in 'A'..'Z' -> latin++
+            }
+        }
+        // un kana ou kanji vaut à peu près une syllabe, soit 2 à 3 lettres latines
+        return jp > 0 && jp * 2.5 > latin
+    }
+
+    // petits mots typiques du japonais transcrit, quasi absents de l'anglais
+    private val romajiMarkers = setOf("wa", "wo", "ga", "ni", "mo", "yo", "ne", "kimi", "boku", "ore", "watashi", "kara", "made", "dake", "nai", "shite", "kokoro", "sora", "yume", "naka", "hitotsu", "zutto", "itsumo", "koko", "doko")
+    private val englishMarkers = setOf("the", "you", "and", "my", "is", "are", "of", "in", "me", "your", "it", "we", "be", "that", "this", "with")
+
+    /** Paroles en lettres latines qui sont bien du japonais transcrit (et pas une traduction anglaise) ? */
+    fun looksRomaji(text: String): Boolean {
+        if (isJapanese(text)) return false
+        val words = CoverSearch.norm(timeTag.replace(text, " ")).split(' ')
+        val jp = words.count { it in romajiMarkers }
+        val en = words.count { it in englishMarkers }
+        return jp >= 6 && jp * 2 >= en
+    }
+
+    private val romajiWords = setOf("romanized", "romanised", "romaji", "romanization", "romanisation")
+
     private fun tokens(t: String): Set<String> =
         CoverSearch.norm(t).split(' ').filter { it.length > 1 || it.firstOrNull()?.isDigit() == true }.toSet()
 
@@ -40,7 +78,8 @@ object LyricsOnline {
         val fileName = song.path.substringAfterLast('/').substringBeforeLast('.')
         val reference = HashSet(tokens("${song.title} ${song.artist} $fileName"))
 
-        fun tryResults(results: List<JSONObject>, extraRef: Set<String> = emptySet()): String? {
+        val romaji = preferRomaji()
+        fun tryResults(results: List<JSONObject>, extraRef: Set<String> = emptySet(), latinOnly: Boolean = false): String? {
             val ref = reference + extraRef
             var best: JSONObject? = null
             var bestScore = 0.0
@@ -49,7 +88,11 @@ object LyricsOnline {
                 val synced = o.optString("syncedLyrics").takeIf { !o.isNull("syncedLyrics") && it.isNotBlank() }
                 val plain = o.optString("plainLyrics").takeIf { !o.isNull("plainLyrics") && it.isNotBlank() }
                 if (synced == null && plain == null) continue
-                val tt = tokens(o.optString("trackName")).filterNot { it in setOf("feat", "ft", "remix", "version", "edit", "radio") }
+                val lyricsText = synced ?: plain.orEmpty()
+                val japanese = isJapanese(lyricsText)
+                val transcribed = romaji && !japanese && looksRomaji(lyricsText)
+                if (latinOnly && !transcribed) continue
+                val tt = tokens(o.optString("trackName")).filterNot { it in setOf("feat", "ft", "remix", "version", "edit", "radio") || it in romajiWords }
                 if (tt.isEmpty()) continue
                 val titleRatio = tt.count { it in ref }.toDouble() / tt.size
                 val at = tokens(o.optString("artistName"))
@@ -58,6 +101,8 @@ object LyricsOnline {
                 val d = o.optDouble("duration", -1.0)
                 val diff = if (d > 0 && durationSec > 0) kotlin.math.abs(d - durationSec) else 99.0
                 var score = titleRatio * 4 + (if (artistOk) 3 else 0) + (if (synced != null) 2 else 0)
+                // version transcrite en romaji préférée à l'écriture japonaise
+                if (transcribed) score += 4
                 score += when {
                     diff <= 3 -> 3.0
                     diff <= 8 -> 2.0
@@ -78,30 +123,49 @@ object LyricsOnline {
             return if (synced != null && (syncOk || plain == null)) synced else plain ?: synced
         }
 
+        var identity: CoverSearch.Identity? = null
+        val found: String? = run {
         // 1. titre et artiste nettoyés
         if (artist != null && title.isNotBlank()) {
-            tryResults(search("track_name=${enc(title)}&artist_name=${enc(artist)}"))?.let { return@withContext it }
+            tryResults(search("track_name=${enc(title)}&artist_name=${enc(artist)}"))?.let { return@run it }
         }
         if (title.isNotBlank()) {
-            tryResults(search("q=${enc(listOfNotNull(artist, title).joinToString(" "))}"))?.let { return@withContext it }
+            tryResults(search("q=${enc(listOfNotNull(artist, title).joinToString(" "))}"))?.let { return@run it }
         }
         // 2. chanson officielle retrouvée (Deezer, iTunes ou AnimeThemes pour les openings)
         val id = runCatching { CoverSearch.identify(song) }.getOrNull()
+        identity = id
         if (id != null && id.title.isNotBlank()) {
             val extra = tokens("${id.title} ${id.artist}")
             val idTitle = featPart.replace(id.title, "").trim()
             if (id.artist.isNotBlank()) {
-                tryResults(search("track_name=${enc(idTitle)}&artist_name=${enc(id.artist)}"), extra)?.let { return@withContext it }
+                tryResults(search("track_name=${enc(idTitle)}&artist_name=${enc(id.artist)}"), extra)?.let { return@run it }
             }
-            tryResults(search("q=${enc("${id.artist} $idTitle".trim())}"), extra)?.let { return@withContext it }
+            tryResults(search("q=${enc("${id.artist} $idTitle".trim())}"), extra)?.let { return@run it }
         }
         // 3. titre raccourci (les derniers mots sont souvent parasites)
         var shorter = titleWords
         while (shorter.size > 2) {
             shorter = shorter.dropLast(1)
-            tryResults(search("q=${enc(listOfNotNull(artist, shorter.joinToString(" ")).joinToString(" "))}"))?.let { return@withContext it }
+            tryResults(search("q=${enc(listOfNotNull(artist, shorter.joinToString(" ")).joinToString(" "))}"))?.let { return@run it }
         }
         null
+        }
+
+        // 4. paroles en japonais : on cherche une version déjà transcrite en romaji sur LRCLIB
+        if (found != null && romaji && isJapanese(found)) {
+            val id = identity ?: runCatching { CoverSearch.identify(song) }.getOrNull()
+            val extra = id?.let { tokens("${it.title} ${it.artist}") }.orEmpty()
+            val bases = LinkedHashSet<String>()
+            id?.takeIf { it.title.isNotBlank() }?.let { bases += "${it.artist} ${featPart.replace(it.title, "").trim()}".trim() }
+            if (title.isNotBlank()) bases += listOfNotNull(artist, title).joinToString(" ")
+            for (b in bases.take(2)) {
+                for (suffix in listOf("", " romanized", " romaji")) {
+                    tryResults(search("q=${enc(b + suffix)}"), extra, latinOnly = true)?.let { return@withContext it }
+                }
+            }
+        }
+        found
     }
 
     private fun search(query: String): List<JSONObject> = runCatching {

@@ -30,6 +30,7 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 
 ## Nouveautés
 
+- **1.27** : paroles des chansons japonaises en romaji (lettres latines) : version transcrite choisie en priorité sur LRCLIB, réglage « Paroles japonaises en romaji » et bouton pour passer en romaji les paroles japonaises déjà enregistrées.
 - **1.26** : identification des openings bien plus fiable : liste intégrée pour One Piece (openings 1 à 26) et Black Clover (1 à 13), qui fonctionne même sans internet ; requêtes MyAnimeList espacées, réessayées et mémorisées pour ne plus échouer en série ; bilan « X sur Y identifiés » à la fin de l'identification groupée.
 - **1.24** : bouton « Identifier l'opening » / « Chercher l'artiste en ligne » avec aperçu et « Appliquer », identification de tous les openings d'un coup, détection des openings corrigée en mode « Regrouper, titres intacts ».
 - **1.23** : minutage des paroles réglable : « Cette ligne commence maintenant » (recale la suite), décalage global par pas de 0,5 s, et une heure modifiée à la main décale les lignes suivantes.
