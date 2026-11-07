@@ -261,6 +261,7 @@ private val guide = listOf(
             "Dans le lecteur, appuyez sur « Paroles ».",
             "Tone Dial lit d'abord les paroles intégrées aux fichiers MP3 et FLAC, ou un fichier .lrc portant le même nom que la musique, dans le même dossier.",
             "S'il n'y en a pas, l'appli les cherche automatiquement sur LRCLIB, une base de paroles libre et gratuite, dès que le morceau commence : elles sont prêtes quand vous ouvrez l'onglet Paroles. Les paroles trouvées sont enregistrées sur le téléphone : la fois suivante, plus besoin de connexion.",
+            "La recherche ignore les parties parasites des noms de fichiers et retrouve d'abord la chanson officielle (Deezer, ou AnimeThemes pour les openings), ce qui permet de trouver les paroles même avec un nom approximatif. Les paroles synchronisées ne sont gardées que si leur durée correspond à votre fichier.",
             "Pour tout compléter d'un coup : Menu > Réglages > « Rechercher toutes les paroles manquantes ». La recherche automatique se désactive au même endroit.",
             "Si rien n'est trouvé : « Google » ouvre la recherche dans le navigateur. Copiez les paroles, revenez dans Tone Dial et appuyez sur « Coller ». « Saisir » permet aussi de les taper ou de les modifier.",
             "Les paroles synchronisées (minutages comme [01:23.45]) défilent en rythme avec la musique, et un appui sur une ligne y fait sauter la lecture.",

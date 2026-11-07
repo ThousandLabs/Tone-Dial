@@ -83,7 +83,17 @@ object CoverSearch {
         RegexOption.IGNORE_CASE,
     )
 
-    suspend fun find(song: Song): Found? {
+    /** Chanson officielle retrouvée : titre, artiste, durée et pochette. */
+    data class Identity(val title: String, val artist: String, val durationSec: Int, val image: String?, val source: String)
+
+    suspend fun find(song: Song): Found? =
+        identify(song)?.let { id -> id.image?.let { Found(it, id.source) } }
+
+    /**
+     * Retrouve la chanson officielle derrière un nom de fichier approximatif.
+     * Sert aux pochettes et à la recherche de paroles.
+     */
+    suspend fun identify(song: Song): Identity? {
         val artist = song.artist.takeUnless { it == "Artiste inconnu" }
         val full = listOfNotNull(artist, song.title).joinToString(" ")
         val fileName = song.path.substringAfterLast('/').substringBeforeLast('.')
@@ -114,13 +124,13 @@ object CoverSearch {
         for (q in queries.take(5)) {
             if (q.isBlank()) continue
             val best = pick(deezer(q), song, reference, durationSec)
-            if (best != null) return Found(best.image, "Deezer")
+            if (best != null) return Identity(best.title, best.artist, best.durationSec, best.image, "Deezer")
             delay(250)
         }
         // iTunes en dernier recours, une seule requête (limite de 20 par minute)
         queries.firstOrNull()?.let { q ->
             val best = pick(itunes(q), song, reference, durationSec)
-            if (best != null) return Found(best.image, "iTunes")
+            if (best != null) return Identity(best.title, best.artist, best.durationSec, best.image, "iTunes")
         }
         return null
     }
@@ -227,7 +237,7 @@ object CoverSearch {
     }
 
     /** Openings et endings : la vraie chanson via AnimeThemes, puis sa pochette ou l'affiche de l'anime. */
-    private suspend fun findAnime(animeName: String, kind: String, number: Int, song: Song): Found? {
+    private suspend fun findAnime(animeName: String, kind: String, number: Int, song: Song): Identity? {
         val name = searchWords(animeName).joinToString(" ")
         if (name.isBlank()) return null
         val type = if (kind.lowercase().startsWith("o")) "OP" else "ED"
@@ -278,12 +288,16 @@ object CoverSearch {
 
         // pochette officielle de la chanson (la durée varie entre version TV et complète : on l'ignore)
         val st = songTitle
+        val sa = songArtist
         if (!st.isNullOrBlank()) {
-            val q = listOfNotNull(songArtist, st).joinToString(" ")
+            val q = listOfNotNull(sa, st).joinToString(" ")
             val reference = tokens("$q ${song.title} ${song.artist}")
-            pick(deezer(q), song, reference, 0, ignoreDuration = true)?.let { return Found(it.image, "Deezer") }
+            pick(deezer(q), song, reference, 0, ignoreDuration = true)?.let {
+                return Identity(st, sa ?: it.artist, it.durationSec, it.image, "Deezer")
+            }
+            return Identity(st, sa.orEmpty(), 0, poster, "AnimeThemes")
         }
-        return poster?.let { Found(it, "AnimeThemes") }
+        return poster?.let { Identity("", "", 0, it, "AnimeThemes") }
     }
 
     // ------------------------------------------------------------------

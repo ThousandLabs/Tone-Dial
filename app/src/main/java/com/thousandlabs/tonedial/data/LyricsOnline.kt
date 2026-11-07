@@ -17,35 +17,85 @@ object LyricsOnline {
     private const val BASE = "https://lrclib.net/api"
     private val featPart = Regex("""\s*[(\[]\s*(?:feat\.?|ft\.?|featuring|with)\s+[^)\]]*[)\]]""", RegexOption.IGNORE_CASE)
 
-    /** Renvoie les paroles trouvées (format .lrc si synchronisées), ou null. */
+    private fun tokens(t: String): Set<String> =
+        CoverSearch.norm(t).split(' ').filter { it.length > 1 || it.firstOrNull()?.isDigit() == true }.toSet()
+
+    /**
+     * Renvoie les paroles trouvées (format .lrc si synchronisées), ou null.
+     * Essaie plusieurs formulations : nom nettoyé, chanson officielle retrouvée sur Deezer
+     * (ou AnimeThemes pour les openings), puis titre raccourci.
+     */
     suspend fun find(song: Song): String? = withContext(Dispatchers.IO) {
-        val title = featPart.replace(song.title, "").trim()
-        val artist = song.artists.firstOrNull()?.takeUnless { it == "Artiste inconnu" }
-        val durationSec = song.duration / 1000.0
+        val durationSec = (song.duration / 1000).toInt()
+        val artistRaw = song.artists.firstOrNull()?.takeUnless { it == "Artiste inconnu" }
+        val artist = artistRaw?.let { CoverSearch.searchWords(it).joinToString(" ") }?.ifBlank { null }
+        val titleWords = CoverSearch.searchWords(featPart.replace(song.title, ""))
+        val title = titleWords.joinToString(" ")
+        val fileName = song.path.substringAfterLast('/').substringBeforeLast('.')
+        val reference = HashSet(tokens("${song.title} ${song.artist} $fileName"))
 
-        val results = ArrayList<JSONObject>()
-        if (artist != null) {
-            results += search("track_name=${enc(title)}&artist_name=${enc(artist)}")
+        fun tryResults(results: List<JSONObject>, extraRef: Set<String> = emptySet()): String? {
+            val ref = reference + extraRef
+            var best: JSONObject? = null
+            var bestScore = 0.0
+            for (o in results) {
+                if (o.optBoolean("instrumental", false)) continue
+                val synced = o.optString("syncedLyrics").takeIf { !o.isNull("syncedLyrics") && it.isNotBlank() }
+                val plain = o.optString("plainLyrics").takeIf { !o.isNull("plainLyrics") && it.isNotBlank() }
+                if (synced == null && plain == null) continue
+                val tt = tokens(o.optString("trackName")).filterNot { it in setOf("feat", "ft", "remix", "version", "edit", "radio") }
+                if (tt.isEmpty()) continue
+                val titleRatio = tt.count { it in ref }.toDouble() / tt.size
+                val at = tokens(o.optString("artistName"))
+                val artistOk = at.isNotEmpty() && at.count { it in ref } >= (at.size + 1) / 2
+                if (titleRatio < 0.6 || (!artistOk && titleRatio < 0.99)) continue
+                val d = o.optDouble("duration", -1.0)
+                val diff = if (d > 0 && durationSec > 0) kotlin.math.abs(d - durationSec) else 99.0
+                var score = titleRatio * 4 + (if (artistOk) 3 else 0) + (if (synced != null) 2 else 0)
+                score += when {
+                    diff <= 3 -> 3.0
+                    diff <= 8 -> 2.0
+                    diff <= 20 -> 1.0
+                    else -> 0.0
+                }
+                if (score > bestScore) {
+                    bestScore = score
+                    best = o
+                }
+            }
+            val b = best ?: return null
+            val synced = b.optString("syncedLyrics").takeIf { !b.isNull("syncedLyrics") && it.isNotBlank() }
+            val plain = b.optString("plainLyrics").takeIf { !b.isNull("plainLyrics") && it.isNotBlank() }
+            val d = b.optDouble("duration", -1.0)
+            // paroles synchronisées seulement si la durée correspond (sinon le défilement serait décalé)
+            val syncOk = d <= 0 || durationSec <= 0 || kotlin.math.abs(d - durationSec) <= 8
+            return if (synced != null && (syncOk || plain == null)) synced else plain ?: synced
         }
-        if (results.isEmpty()) {
-            results += search("q=${enc(listOfNotNull(artist, title).joinToString(" "))}")
-        }
-        if (results.isEmpty()) return@withContext null
 
-        fun score(o: JSONObject): Double {
-            var s = 0.0
-            if (!o.isNull("syncedLyrics") && o.optString("syncedLyrics").isNotBlank()) s += 10
-            if (!o.isNull("plainLyrics") && o.optString("plainLyrics").isNotBlank()) s += 3
-            val d = o.optDouble("duration", -1.0)
-            if (d > 0 && durationSec > 0) s -= kotlin.math.min(10.0, kotlin.math.abs(d - durationSec) / 2)
-            if (o.optBoolean("instrumental", false)) s -= 20
-            return s
+        // 1. titre et artiste nettoyés
+        if (artist != null && title.isNotBlank()) {
+            tryResults(search("track_name=${enc(title)}&artist_name=${enc(artist)}"))?.let { return@withContext it }
         }
-
-        val best = results.maxByOrNull(::score) ?: return@withContext null
-        val synced = best.optString("syncedLyrics").takeIf { !best.isNull("syncedLyrics") && it.isNotBlank() }
-        val plain = best.optString("plainLyrics").takeIf { !best.isNull("plainLyrics") && it.isNotBlank() }
-        synced ?: plain
+        if (title.isNotBlank()) {
+            tryResults(search("q=${enc(listOfNotNull(artist, title).joinToString(" "))}"))?.let { return@withContext it }
+        }
+        // 2. chanson officielle retrouvée (Deezer, iTunes ou AnimeThemes pour les openings)
+        val id = runCatching { CoverSearch.identify(song) }.getOrNull()
+        if (id != null && id.title.isNotBlank()) {
+            val extra = tokens("${id.title} ${id.artist}")
+            val idTitle = featPart.replace(id.title, "").trim()
+            if (id.artist.isNotBlank()) {
+                tryResults(search("track_name=${enc(idTitle)}&artist_name=${enc(id.artist)}"), extra)?.let { return@withContext it }
+            }
+            tryResults(search("q=${enc("${id.artist} $idTitle".trim())}"), extra)?.let { return@withContext it }
+        }
+        // 3. titre raccourci (les derniers mots sont souvent parasites)
+        var shorter = titleWords
+        while (shorter.size > 2) {
+            shorter = shorter.dropLast(1)
+            tryResults(search("q=${enc(listOfNotNull(artist, shorter.joinToString(" ")).joinToString(" "))}"))?.let { return@withContext it }
+        }
+        null
     }
 
     private fun search(query: String): List<JSONObject> = runCatching {
