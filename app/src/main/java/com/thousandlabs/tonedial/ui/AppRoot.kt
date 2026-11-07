@@ -39,6 +39,8 @@ sealed interface Screen {
     data object Stats : Screen
     data object MissingCovers : Screen
     data object OpeningsStatus : Screen
+    data object HiddenSongs : Screen
+    data object Duplicates : Screen
     data class AutoDetail(val kind: AutoList) : Screen
     data object Search : Screen
     data object Equalizer : Screen
@@ -80,6 +82,15 @@ fun AppRoot(vm: MainViewModel) {
         vm.messages.collect {
             snackbar.currentSnackbarData?.dismiss()
             snackbar.showSnackbar(it)
+        }
+    }
+    LaunchedEffect(Unit) {
+        vm.undo.collect { msg ->
+            snackbar.currentSnackbarData?.dismiss()
+            launch {
+                val r = snackbar.showSnackbar(msg, actionLabel = "Annuler", duration = SnackbarDuration.Short)
+                if (r == SnackbarResult.ActionPerformed) vm.undoRemove()
+            }
         }
     }
 
@@ -219,6 +230,8 @@ fun AppRoot(vm: MainViewModel) {
                         Screen.Stats -> StatsScreen(vm, nav)
                         Screen.MissingCovers -> MissingCoversScreen(vm, nav)
                         Screen.OpeningsStatus -> OpeningsStatusScreen(vm, nav)
+                        Screen.HiddenSongs -> HiddenSongsScreen(vm, nav)
+                        Screen.Duplicates -> DuplicatesScreen(vm, nav)
                         is Screen.AutoDetail -> AutoDetailScreen(vm, nav, s.kind)
                         Screen.Search -> SearchScreen(vm, nav)
                         Screen.Equalizer -> EqualizerScreen(nav)
@@ -318,6 +331,11 @@ private fun SelectionBar(vm: MainViewModel, selection: Selection, onDelete: (Lis
                         text = { Text(if (allFav) "Retirer des favoris" else "Ajouter aux favoris") },
                         leadingIcon = { Icon(if (allFav) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder, null) },
                         onClick = { menu = false; vm.setFavorites(selection.songs(), !allFav); selection.clear() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Masquer de la bibliothèque") },
+                        leadingIcon = { Icon(Icons.Outlined.VisibilityOff, null) },
+                        onClick = { menu = false; vm.hideSongs(selection.songs()); selection.clear() },
                     )
                     DropdownMenuItem(
                         text = { Text("Supprimer du téléphone") },
@@ -471,6 +489,9 @@ fun SongMenuSheet(
                         onClick = { vm.identifySong(song); onDismiss() },
                     )
                     ListItemRow(Icons.Outlined.Info, "Informations", onClick = { dialog = "info" })
+                    ListItemRow(Icons.Outlined.VisibilityOff, "Masquer ce titre", subtitle = "Il n'apparaît plus dans la bibliothèque ; le fichier reste sur le téléphone", onClick = {
+                        vm.hideSongs(listOf(song)); onDismiss()
+                    })
                     ListItemRow(Icons.Outlined.DeleteForever, "Supprimer du téléphone", tint = androidx.compose.ui.graphics.Color(0xFFE57373), onClick = {
                         nav.deleteSongs(listOf(song)); onDismiss()
                     })

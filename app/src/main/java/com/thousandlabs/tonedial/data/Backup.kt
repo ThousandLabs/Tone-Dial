@@ -20,7 +20,8 @@ object Backup {
 
     private val intKeys = listOf("eq_preset", "bass", "virtualizer", "min_duration_sec", "queue_repeat") +
         (0 until 10).map { "eq_band_$it" }
-    private val boolKeys = listOf("eq_enabled", "smart_tags", "covers_auto", "update_auto")
+    // réglages dont la valeur par défaut est « activé »
+    private val boolKeys = listOf("eq_enabled", "smart_tags", "covers_auto", "update_auto", "tap_jump_queue", "lyrics_romaji", "notif_buttons")
 
     fun suggestedName(): String = "ToneDial-sauvegarde-" + SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) + ".json"
 
@@ -78,6 +79,7 @@ object Backup {
                     }
                 })
                 put("excluded", JSONArray(LibraryPrefs.excluded.value.toList()))
+                put("hidden", JSONArray(LibraryPrefs.hidden.value.toList()))
                 put("sortSongs", UserStore.sort.value.name)
                 put("favSort", UserStore.favoritesSort().name)
                 put("settings", JSONObject().apply {
@@ -185,6 +187,9 @@ object Backup {
             }
             root.optJSONArray("excluded")?.let { ex ->
                 LibraryPrefs.setExcluded(LibraryPrefs.excluded.value + (0 until ex.length()).map { ex.getString(it) })
+            }
+            root.optJSONArray("hidden")?.let { h ->
+                LibraryPrefs.setHidden(LibraryPrefs.hidden.value + (0 until h.length()).mapNotNull { idMap[h.getLong(it)] })
             }
 
             // réglages

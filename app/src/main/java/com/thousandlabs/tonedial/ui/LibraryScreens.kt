@@ -758,14 +758,31 @@ fun SearchScreen(vm: MainViewModel, nav: Nav) {
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
 
-    val q = query.trim().lowercase()
-    val foundSongs = remember(q, songs) {
-        if (q.isEmpty()) emptyList() else songs.filter {
-            it.title.lowercase().contains(q) || it.artist.lowercase().contains(q) || it.album.lowercase().contains(q)
-        }.sortedBy { it.title.lowercase() }
+    // recherche sans tenir compte des accents ni des majuscules (« beyonce » trouve « Beyoncé »)
+    val q = searchFold(query.trim())
+    val words = q.split(' ').filter { it.isNotBlank() }
+    fun matches(vararg fields: String): Boolean {
+        val text = fields.joinToString(" ") { searchFold(it) }
+        return words.all { text.contains(it) }
     }
-    val foundAlbums = remember(q, albums) { if (q.isEmpty()) emptyList() else albums.filter { it.name.lowercase().contains(q) }.take(10) }
-    val foundArtists = remember(q, artists) { if (q.isEmpty()) emptyList() else artists.filter { it.name.lowercase().contains(q) }.take(10) }
+    val foundSongs = remember(q, songs) {
+        if (words.isEmpty()) emptyList() else songs.filter { matches(it.title, it.artist, it.album) }
+            // titres qui commencent par la recherche d'abord
+            .sortedWith(compareBy<Song>({ !searchFold(it.title).startsWith(q) }, { it.title.lowercase() }))
+    }
+    val foundAlbums = remember(q, albums) { if (words.isEmpty()) emptyList() else albums.filter { matches(it.name, it.artist) }.take(10) }
+    val foundArtists = remember(q, artists) { if (words.isEmpty()) emptyList() else artists.filter { matches(it.name) }.take(10) }
+
+    // recherches récentes : mémorisées quand on s'arrête d'écrire et qu'il y a des résultats
+    var recent by remember { mutableStateOf(RecentSearches.list()) }
+    LaunchedEffect(q) {
+        if (words.isEmpty()) return@LaunchedEffect
+        kotlinx.coroutines.delay(1500)
+        if (foundSongs.isNotEmpty() || foundAlbums.isNotEmpty() || foundArtists.isNotEmpty()) {
+            RecentSearches.add(query.trim())
+            recent = RecentSearches.list()
+        }
+    }
 
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.padding(start = 4.dp, end = 12.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -783,8 +800,25 @@ fun SearchScreen(vm: MainViewModel, nav: Nav) {
                 modifier = Modifier.weight(1f).focusRequester(focus),
             )
         }
-        if (q.isNotEmpty() && foundSongs.isEmpty() && foundAlbums.isEmpty() && foundArtists.isEmpty()) {
+        if (words.isNotEmpty() && foundSongs.isEmpty() && foundAlbums.isEmpty() && foundArtists.isEmpty()) {
             EmptyState(Icons.Outlined.Search, "Aucun résultat", "Essayez avec un autre mot.")
+        }
+        if (words.isEmpty() && recent.isNotEmpty()) {
+            Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Recherches récentes", style = MaterialTheme.typography.titleSmall, color = TdColors.TextDim, modifier = Modifier.weight(1f))
+                TextButton(onClick = { RecentSearches.clear(); recent = emptyList() }) { Text("Effacer") }
+            }
+            recent.forEach { r ->
+                Row(
+                    Modifier.fillMaxWidth().clickable { query = r }.padding(horizontal = 20.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Outlined.History, null, tint = TdColors.TextDim, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(16.dp))
+                    Text(r, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Icon(Icons.Outlined.NorthWest, null, tint = TdColors.TextDim, modifier = Modifier.size(18.dp))
+                }
+            }
         }
         LazyColumn(Modifier.fillMaxSize()) {
             if (foundArtists.isNotEmpty()) {
@@ -897,6 +931,17 @@ fun SettingsScreen(vm: MainViewModel, nav: Nav) {
                     subtitle = if (excluded.isEmpty()) "Masquer les audios WhatsApp, enregistrements…" else "${excluded.size} dossier(s) masqué(s)",
                     onClick = { nav.go(Screen.FolderFilter) },
                 )
+                val hidden by vm.hiddenSongs.collectAsStateWithLifecycle()
+                ListItemRow(
+                    Icons.Outlined.VisibilityOff, "Titres masqués",
+                    subtitle = if (hidden.isEmpty()) "Aucun titre masqué. Menu d'un titre > « Masquer ce titre »." else "${hidden.size} titre(s) masqué(s) : appuyez pour les réafficher",
+                    onClick = { nav.go(Screen.HiddenSongs) },
+                )
+                ListItemRow(
+                    Icons.Outlined.ContentCopy, "Titres en double",
+                    subtitle = "Retrouve les fichiers présents plusieurs fois (même titre, même artiste, même durée)",
+                    onClick = { nav.go(Screen.Duplicates) },
+                )
                 SectionLabel("Pochettes")
                 CoverSettings(vm, nav)
                 SectionLabel("Lecture")
@@ -920,6 +965,24 @@ fun SettingsScreen(vm: MainViewModel, nav: Nav) {
                         colors = SwitchDefaults.colors(checkedTrackColor = TdColors.Accent, checkedThumbColor = TdColors.Background),
                     )
                 }
+                var skipSilence by remember { mutableStateOf(vm.skipSilence()) }
+                SettingSwitch(
+                    Icons.Outlined.FastForward, "Sauter les silences",
+                    "Passe les blancs au début, à la fin et au milieu des titres (utile pour les enregistrements et les vidéos converties).",
+                    skipSilence,
+                ) { skipSilence = it; vm.setSkipSilence(it) }
+                var headset by remember { mutableStateOf(vm.resumeOnHeadset()) }
+                SettingSwitch(
+                    Icons.Outlined.Headphones, "Reprendre en branchant des écouteurs",
+                    "La musique reprend quand vous branchez des écouteurs ou connectez une enceinte ou des écouteurs Bluetooth. Elle se met déjà en pause quand vous les débranchez.",
+                    headset,
+                ) { headset = it; vm.setResumeOnHeadset(it) }
+                var notifButtons by remember { mutableStateOf(vm.notifButtons()) }
+                SettingSwitch(
+                    Icons.Outlined.Notifications, "Favori et aléatoire dans la notification",
+                    "Ajoute les boutons Favori (cœur) et Aléatoire à la notification et à l'écran verrouillé.",
+                    notifButtons,
+                ) { notifButtons = it; vm.setNotifButtons(it) }
                 SectionLabel("Openings et endings")
                 val animeBatch by vm.animeBatch.collectAsStateWithLifecycle()
                 if (animeBatch.running) {
@@ -1282,6 +1345,47 @@ private fun LyricsSettings(vm: MainViewModel) {
             Icons.Outlined.Search, "Rechercher toutes les paroles manquantes",
             subtitle = if (progress.finished) "Terminé : ${progress.found} parole(s) ajoutée(s). Appuyez pour relancer." else "Pour tous les titres sans paroles. Connexion Internet nécessaire.",
             onClick = { vm.startLyricsBatch() },
+        )
+    }
+}
+
+
+/** Texte sans accents, en minuscules, pour la recherche. */
+fun searchFold(s: String): String =
+    java.text.Normalizer.normalize(s.lowercase(), java.text.Normalizer.Form.NFD)
+        .replace(Regex("\\p{Mn}+"), "")
+        .replace('’', '\'')
+
+/** Dix dernières recherches. */
+object RecentSearches {
+    private const val KEY = "recent_searches"
+    fun list(): List<String> =
+        com.thousandlabs.tonedial.data.UserStore.getString(KEY)?.split('\n')?.filter { it.isNotBlank() }.orEmpty()
+    fun add(q: String) {
+        if (q.isBlank()) return
+        val l = (listOf(q) + list().filterNot { it.equals(q, ignoreCase = true) || searchFold(q).startsWith(searchFold(it)) }).take(10)
+        com.thousandlabs.tonedial.data.UserStore.putString(KEY, l.joinToString("\n"))
+    }
+    fun clear() = com.thousandlabs.tonedial.data.UserStore.putString(KEY, null)
+}
+
+/** Ligne de réglage avec interrupteur. */
+@Composable
+fun SettingSwitch(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable { onChange(!checked) }.padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, tint = TdColors.Text, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(18.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim)
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onChange,
+            colors = SwitchDefaults.colors(checkedTrackColor = TdColors.Accent, checkedThumbColor = TdColors.Background),
         )
     }
 }

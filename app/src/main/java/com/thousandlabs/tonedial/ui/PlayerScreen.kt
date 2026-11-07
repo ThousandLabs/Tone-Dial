@@ -77,6 +77,7 @@ fun MiniPlayer(song: Song, ui: PlayerUi, vm: MainViewModel, onOpen: () -> Unit) 
 @Composable
 fun PlayerScreen(vm: MainViewModel, nav: Nav, song: Song, ui: PlayerUi, onClose: () -> Unit) {
     val favorites by vm.favorites.collectAsStateWithLifecycle()
+    val albums by vm.albums.collectAsStateWithLifecycle()
     val timer by SleepTimer.state.collectAsStateWithLifecycle()
     var showLyrics by remember { mutableStateOf(false) }
     var showTimer by remember { mutableStateOf(false) }
@@ -113,7 +114,12 @@ fun PlayerScreen(vm: MainViewModel, nav: Nav, song: Song, ui: PlayerUi, onClose:
                 IconButton(onClick = onClose) { Icon(Icons.Outlined.KeyboardArrowDown, "Réduire", modifier = Modifier.size(30.dp)) }
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("LECTURE EN COURS", style = MaterialTheme.typography.labelLarge.copy(fontSize = 11.sp, letterSpacing = 1.5.sp), color = TdColors.TextDim)
-                    Text(song.album, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        song.album, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable {
+                            if (albums.any { it.id == song.albumId }) { onClose(); nav.go(Screen.AlbumDetail(song.albumId)) }
+                        }.padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
                 }
                 IconButton(onClick = { nav.openMenu(song, null) }) { Icon(Icons.Outlined.MoreVert, "Options") }
             }
@@ -144,7 +150,12 @@ fun PlayerScreen(vm: MainViewModel, nav: Nav, song: Song, ui: PlayerUi, onClose:
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(song.title, style = MaterialTheme.typography.headlineSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(song.artist, style = MaterialTheme.typography.bodyLarge, color = TdColors.TextDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        song.artist, style = MaterialTheme.typography.bodyLarge, color = TdColors.TextDim, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.clickable {
+                            song.artists.firstOrNull { it != "Artiste inconnu" }?.let { onClose(); nav.go(Screen.ArtistDetail(it)) }
+                        },
+                    )
                 }
                 val fav = song.id in favorites
                 IconButton(onClick = { vm.toggleFavorite(song.id) }) {
@@ -168,8 +179,15 @@ fun PlayerScreen(vm: MainViewModel, nav: Nav, song: Song, ui: PlayerUi, onClose:
                 IconButton(onClick = vm::toggleShuffle) {
                     Icon(Icons.Outlined.Shuffle, "Aléatoire", tint = if (ui.shuffle) TdColors.Accent else TdColors.TextDim)
                 }
-                IconButton(onClick = { vm.previous() }, modifier = Modifier.size(56.dp)) {
-                    Icon(Icons.Rounded.SkipPrevious, "Précédent", modifier = Modifier.size(38.dp))
+                // appui : titre précédent ; appui long : recule de 10 secondes
+                Box(
+                    Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .combinedClickable(onClick = { vm.previous() }, onLongClick = { vm.seekBy(-10_000) }),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Rounded.SkipPrevious, "Précédent (appui long : reculer de 10 s)", modifier = Modifier.size(38.dp))
                 }
                 Box(
                     Modifier
@@ -186,8 +204,15 @@ fun PlayerScreen(vm: MainViewModel, nav: Nav, song: Song, ui: PlayerUi, onClose:
                         modifier = Modifier.size(40.dp),
                     )
                 }
-                IconButton(onClick = { vm.next() }, modifier = Modifier.size(56.dp)) {
-                    Icon(Icons.Rounded.SkipNext, "Suivant", modifier = Modifier.size(38.dp))
+                // appui : titre suivant ; appui long : avance de 10 secondes
+                Box(
+                    Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .combinedClickable(onClick = { vm.next() }, onLongClick = { vm.seekBy(10_000) }),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Rounded.SkipNext, "Suivant (appui long : avancer de 10 s)", modifier = Modifier.size(38.dp))
                 }
                 IconButton(onClick = vm::cycleRepeat) {
                     Icon(
@@ -280,6 +305,7 @@ private fun SeekBar(ui: PlayerUi, vm: MainViewModel) {
 @Composable
 private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long, isPlaying: Boolean = false) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val lyricsScale = LyricsScale.value
     val lyrics by vm.lyrics.collectAsStateWithLifecycle()
     val loading by vm.lyricsLoading.collectAsStateWithLifecycle()
     val searching by vm.lyricsSearching.collectAsStateWithLifecycle()
@@ -486,8 +512,8 @@ private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long, isPlayi
                         }
                         Text(
                             line.text.ifBlank { "·" },
-                            style = if (l.synced) MaterialTheme.typography.titleMedium.copy(fontSize = 19.sp, lineHeight = 28.sp)
-                            else MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp),
+                            style = if (l.synced) MaterialTheme.typography.titleMedium.copy(fontSize = (19 * lyricsScale).sp, lineHeight = (28 * lyricsScale).sp)
+                            else MaterialTheme.typography.bodyLarge.copy(fontSize = (16 * lyricsScale).sp, lineHeight = (24 * lyricsScale).sp),
                             color = when {
                                 !l.synced -> TdColors.Text
                                 active -> TdColors.Accent
@@ -525,6 +551,18 @@ private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long, isPlayi
                                         },
                                     )
                                 }
+                                DropdownMenuItem(
+                                    text = { Text("Agrandir le texte") },
+                                    leadingIcon = { Icon(Icons.Outlined.TextIncrease, null) },
+                                    enabled = lyricsScale < 1.6f,
+                                    onClick = { LyricsScale.change(+0.1f) },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Réduire le texte") },
+                                    leadingIcon = { Icon(Icons.Outlined.TextDecrease, null) },
+                                    enabled = lyricsScale > 0.8f,
+                                    onClick = { LyricsScale.change(-0.1f) },
+                                )
                                 DropdownMenuItem(
                                     text = { Text("Rechercher d'autres paroles en ligne") },
                                     leadingIcon = { Icon(Icons.Outlined.Search, null) },
@@ -718,8 +756,19 @@ private fun KaraokeLine(
     }
     Text(
         annotated,
-        style = MaterialTheme.typography.titleMedium.copy(fontSize = 21.sp, lineHeight = 30.sp),
+        style = MaterialTheme.typography.titleMedium.copy(fontSize = (21 * LyricsScale.value).sp, lineHeight = (30 * LyricsScale.value).sp),
         fontWeight = FontWeight.Bold,
         modifier = modifier,
     )
+}
+
+/** Taille du texte des paroles, réglable depuis « Options » (de 80 % à 160 %). */
+object LyricsScale {
+    private val state = androidx.compose.runtime.mutableFloatStateOf(com.thousandlabs.tonedial.data.UserStore.getInt("lyrics_scale", 100) / 100f)
+    val value: Float get() = state.floatValue
+    fun change(delta: Float) {
+        val v = ((state.floatValue + delta) * 10).let { kotlin.math.round(it) / 10f }.coerceIn(0.8f, 1.6f)
+        state.floatValue = v
+        com.thousandlabs.tonedial.data.UserStore.putInt("lyrics_scale", (v * 100).toInt())
+    }
 }

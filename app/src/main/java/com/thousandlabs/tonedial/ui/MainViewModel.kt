@@ -125,6 +125,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         connect()
+        // messages du service de lecture (titre illisible…)
+        viewModelScope.launch { PlaybackService.events.collect { _messages.tryEmit(it) } }
+        watchMediaStore()
         com.thousandlabs.tonedial.data.OpeningsBatch.statusMap()
         // artiste appliqué par l'identification groupée : listes et lecteur mis à jour
         viewModelScope.launch {
@@ -165,9 +168,116 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ---------------- Mise à jour automatique de la bibliothèque ----------------
+    private var mediaObserver: android.database.ContentObserver? = null
+    private var reloadJob: Job? = null
+
+    /** Une musique téléchargée, copiée ou supprimée apparaît (ou disparaît) sans relancer l'appli. */
+    private fun watchMediaStore() {
+        val obs = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                reloadJob?.cancel()
+                reloadJob = viewModelScope.launch {
+                    delay(2500) // un téléchargement déclenche plusieurs changements à la suite
+                    reloadQuietly()
+                }
+            }
+        }
+        runCatching {
+            ctx.contentResolver.registerContentObserver(android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, true, obs)
+            mediaObserver = obs
+        }
+    }
+
+    /** Recharge la liste sans écran de chargement ; la lecture en cours n'est pas touchée. */
+    private suspend fun reloadQuietly() {
+        if (_loading.value) return
+        val fresh = runCatching {
+            MusicRepository.loadSongs(ctx, UserStore.minDurationSec.value * 1000L, artistMode())
+        }.getOrNull() ?: return
+        val before = _allSongs.value.map { it.id }.toSet()
+        if (fresh.map { it.id }.toSet() == before && fresh.size == _allSongs.value.size) return
+        val added = fresh.count { it.id !in before }
+        _allSongs.value = fresh
+        applyFilters()
+        if (added > 0) _messages.tryEmit(if (added == 1) "1 nouveau titre ajouté à la bibliothèque" else "$added nouveaux titres ajoutés à la bibliothèque")
+    }
+
+    override fun onCleared() {
+        mediaObserver?.let { runCatching { ctx.contentResolver.unregisterContentObserver(it) } }
+        super.onCleared()
+    }
+
+    // ---------------- Titres masqués ----------------
+    val hiddenSongs = com.thousandlabs.tonedial.data.LibraryPrefs.hidden
+
+    fun hideSongs(songs: List<Song>) {
+        com.thousandlabs.tonedial.data.LibraryPrefs.setHidden(com.thousandlabs.tonedial.data.LibraryPrefs.hidden.value + songs.map { it.id })
+        applyFilters()
+        _messages.tryEmit(if (songs.size == 1) "Titre masqué (Réglages > Titres masqués pour le réafficher)" else "${songs.size} titres masqués")
+    }
+
+    fun unhideSong(id: Long) {
+        com.thousandlabs.tonedial.data.LibraryPrefs.setHidden(com.thousandlabs.tonedial.data.LibraryPrefs.hidden.value - id)
+        applyFilters()
+    }
+
+    /** Titres masqués un par un (pas ceux des dossiers masqués). */
+    fun hiddenSongList(): List<Song> {
+        val ids = com.thousandlabs.tonedial.data.LibraryPrefs.hidden.value
+        return _allSongs.value.filter { it.id in ids }.map { com.thousandlabs.tonedial.data.LibraryPrefs.apply(it) }
+    }
+
+    // ---------------- Doublons ----------------
+    /** Groupes de titres identiques (même titre, même artiste, durée à 3 secondes près). */
+    fun duplicateGroups(): List<List<Song>> {
+        fun norm(t: String) = com.thousandlabs.tonedial.data.CoverSearch.norm(t)
+            .replace(Regex("\\b(official|video|audio|lyrics?|clip|officiel|hd|hq|mp3)\\b"), " ")
+            .replace(Regex("\\s+"), " ").trim()
+        return _songs.value
+            .groupBy { norm(it.title) + "|" + norm(it.artist) }
+            .values
+            .flatMap { group ->
+                if (group.size < 2) emptyList()
+                else {
+                    // sous-groupes de durées proches
+                    val sorted = group.sortedBy { it.duration }
+                    val out = mutableListOf<MutableList<Song>>()
+                    for (song in sorted) {
+                        val last = out.lastOrNull()
+                        if (last != null && song.duration - last.last().duration <= 3000) last += song else out += mutableListOf(song)
+                    }
+                    out.filter { it.size > 1 }
+                }
+            }
+            .sortedBy { it.first().title.lowercase() }
+    }
+
+    // ---------------- Réglages de lecture ----------------
+    fun skipSilence(): Boolean = PlaybackService.skipSilence()
+    fun setSkipSilence(on: Boolean) {
+        UserStore.putBool("skip_silence", on)
+        PlaybackService.instance?.applySkipSilence()
+    }
+    fun resumeOnHeadset(): Boolean = PlaybackService.resumeOnHeadset()
+    fun setResumeOnHeadset(on: Boolean) = UserStore.putBool("resume_on_headset", on)
+    fun notifButtons(): Boolean = PlaybackService.notifButtons()
+    fun setNotifButtons(on: Boolean) {
+        UserStore.putBool("notif_buttons", on)
+        PlaybackService.instance?.updateButtons()
+    }
+
+    /** Avance ou recule de quelques secondes dans le titre en cours. */
+    fun seekBy(deltaMs: Long) {
+        val c = controller ?: return
+        val dur = c.duration.takeIf { it != C.TIME_UNSET } ?: Long.MAX_VALUE
+        seekTo((c.currentPosition + deltaMs).coerceIn(0L, (dur - 500).coerceAtLeast(0L)))
+    }
+
     private fun applyFilters() {
         _songs.value = _allSongs.value
             .filterNot { com.thousandlabs.tonedial.data.LibraryPrefs.isExcluded(it.folderPath) }
+            .filterNot { com.thousandlabs.tonedial.data.LibraryPrefs.isHidden(it.id) }
             .map { com.thousandlabs.tonedial.data.LibraryPrefs.apply(it) }
     }
 
@@ -793,9 +903,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         c.play()
     }
 
+    /** Dernier titre retiré de la file, pour « Annuler ». */
+    private var lastRemoved: Pair<Int, MediaItem>? = null
+    private val _undo = MutableSharedFlow<String>(extraBufferCapacity = 2)
+    /** Message avec bouton « Annuler ». */
+    val undo: SharedFlow<String> = _undo.asSharedFlow()
+
     fun removeFromQueue(windowIndex: Int) {
         val c = controller ?: return
-        if (windowIndex in 0 until c.mediaItemCount) c.removeMediaItem(windowIndex)
+        if (windowIndex !in 0 until c.mediaItemCount) return
+        val item = c.getMediaItemAt(windowIndex)
+        c.removeMediaItem(windowIndex)
+        lastRemoved = windowIndex to item
+        _undo.tryEmit("« ${item.mediaMetadata.title ?: "Titre"} » retiré de la file")
+    }
+
+    fun undoRemove() {
+        val c = controller ?: return
+        val (index, item) = lastRemoved ?: return
+        lastRemoved = null
+        c.addMediaItem(index.coerceIn(0, c.mediaItemCount), item)
     }
 
     fun clearQueue() {

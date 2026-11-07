@@ -22,6 +22,8 @@ import com.thousandlabs.tonedial.R
 import com.thousandlabs.tonedial.data.Song
 import com.thousandlabs.tonedial.data.UserStore
 import com.thousandlabs.tonedial.widget.PlayerWidget
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 /**
  * Service de lecture : continue la musique en arrière-plan, affiche la notification
@@ -34,7 +36,22 @@ class PlaybackService : MediaSessionService() {
         @Volatile
         var instance: PlaybackService? = null
             private set
+
+        /** Messages pour l'écran (fichier illisible…). */
+        val events = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 4)
+
+        private const val CMD_FAVORITE = "tonedial.FAVORITE"
+        private const val CMD_SHUFFLE = "tonedial.SHUFFLE"
+
+        // réglages lus par le service
+        fun skipSilence(): Boolean = UserStore.getBool("skip_silence", false)
+        fun resumeOnHeadset(): Boolean = UserStore.getBool("resume_on_headset", false)
+        fun notifButtons(): Boolean = UserStore.getBool("notif_buttons", true)
     }
+
+    private val scope = kotlinx.coroutines.MainScope()
+    private var errorsInARow = 0
+    private var audioManager: android.media.AudioManager? = null
 
     lateinit var player: ExoPlayer
         private set
@@ -78,13 +95,34 @@ class PlaybackService : MediaSessionService() {
             .build()
 
         AudioFx.attach(player.audioSessionId)
+        player.skipSilenceEnabled = skipSilence()
 
         player.addListener(object : Player.Listener {
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
                 AudioFx.attach(audioSessionId)
             }
 
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                // fichier supprimé, déplacé ou abîmé : on passe au suivant au lieu de rester bloqué
+                errorsInARow++
+                val title = player.currentMediaItem?.mediaMetadata?.title?.toString().orEmpty()
+                if (errorsInARow <= player.mediaItemCount.coerceAtMost(20) && player.hasNextMediaItem()) {
+                    events.tryEmit(if (title.isNotBlank()) "« $title » est illisible : titre suivant" else "Titre illisible : titre suivant")
+                    player.seekToNextMediaItem()
+                    player.prepare()
+                    player.play()
+                } else {
+                    events.tryEmit("Lecture impossible : fichier introuvable ou abîmé")
+                    errorsInARow = 0
+                }
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_READY) errorsInARow = 0
+            }
+
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                updateButtons()
                 val id = mediaItem?.mediaId?.toLongOrNull()
                 if (id != null && (player.playWhenReady || reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO)) {
                     UserStore.recordPlay(id)
@@ -98,7 +136,8 @@ class PlaybackService : MediaSessionService() {
                 val now = android.os.SystemClock.elapsedRealtime()
                 val id = player.currentMediaItem?.mediaId?.toLongOrNull()
                 if (!isPlaying && id != null && lastTick > 0) {
-                    com.thousandlabs.tonedial.data.ListenStats.addListening(id, (now - lastTick).coerceIn(0, 15_000))
+                    val elapsed = ((now - lastTick) * player.playbackParameters.speed).toLong()
+                    com.thousandlabs.tonedial.data.ListenStats.addListening(id, elapsed.coerceIn(0, 15_000))
                     com.thousandlabs.tonedial.data.ListenStats.save()
                 }
                 lastTick = if (isPlaying) now else 0L
@@ -118,6 +157,7 @@ class PlaybackService : MediaSessionService() {
 
             override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
                 saveQueueNow()
+                updateButtons()
             }
 
             override fun onRepeatModeChanged(repeatMode: Int) {
@@ -146,7 +186,76 @@ class PlaybackService : MediaSessionService() {
 
         instance = this
         handler.post(saveLoop)
+        updateButtons()
+        // le cœur de la notification suit les favoris, même changés depuis l'appli
+        scope.launch { UserStore.favorites.collect { updateButtons() } }
+        registerHeadsetResume()
         PlayerWidget.updateAll(this)
+    }
+
+    // ---------- Boutons Favori et Aléatoire (notification, écran verrouillé) ----------
+
+    fun updateButtons() {
+        val s = session ?: return
+        if (!notifButtons()) {
+            s.setCustomLayout(emptyList())
+            return
+        }
+        val id = player.currentMediaItem?.mediaId?.toLongOrNull()
+        val fav = id != null && id in UserStore.favorites.value
+        val shuffle = player.shuffleModeEnabled
+        s.setCustomLayout(
+            listOf(
+                androidx.media3.session.CommandButton.Builder()
+                    .setDisplayName(if (fav) "Retirer des favoris" else "Ajouter aux favoris")
+                    .setIconResId(if (fav) R.drawable.ic_notif_favorite else R.drawable.ic_notif_favorite_border)
+                    .setSessionCommand(androidx.media3.session.SessionCommand(CMD_FAVORITE, android.os.Bundle.EMPTY))
+                    .build(),
+                androidx.media3.session.CommandButton.Builder()
+                    .setDisplayName(if (shuffle) "Désactiver l'aléatoire" else "Activer l'aléatoire")
+                    .setIconResId(if (shuffle) R.drawable.ic_notif_shuffle_on else R.drawable.ic_notif_shuffle)
+                    .setSessionCommand(androidx.media3.session.SessionCommand(CMD_SHUFFLE, android.os.Bundle.EMPTY))
+                    .build(),
+            ),
+        )
+    }
+
+    fun applySkipSilence() {
+        if (::player.isInitialized) player.skipSilenceEnabled = skipSilence()
+    }
+
+    // ---------- Reprise de la lecture en branchant des écouteurs ou une enceinte Bluetooth ----------
+
+    private var lastConnectResume = 0L
+    private val deviceCallback = object : android.media.AudioDeviceCallback() {
+        private var ready = false
+        override fun onAudioDevicesAdded(addedDevices: Array<out android.media.AudioDeviceInfo>) {
+            // le premier appel liste les appareils déjà branchés : on l'ignore
+            if (!ready) { ready = true; return }
+            if (!resumeOnHeadset()) return
+            val headset = addedDevices.any {
+                it.isSink && it.type in setOf(
+                    android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET,
+                    android.media.AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+                    android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+                    android.media.AudioDeviceInfo.TYPE_USB_HEADSET,
+                )
+            }
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (headset && !player.isPlaying && player.mediaItemCount > 0 && now - lastConnectResume > 5000) {
+                lastConnectResume = now
+                // laisse le temps au Bluetooth de prendre le son, sinon il sortirait du haut-parleur
+                handler.postDelayed({
+                    if (player.playbackState == Player.STATE_IDLE) player.prepare()
+                    player.play()
+                }, 1500)
+            }
+        }
+    }
+
+    private fun registerHeadsetResume() {
+        audioManager = getSystemService(android.media.AudioManager::class.java)
+        runCatching { audioManager?.registerAudioDeviceCallback(deviceCallback, handler) }
     }
 
     /** Ordre de lecture réel (mélangé si l'aléatoire est actif). */
@@ -189,6 +298,8 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         handler.removeCallbacks(saveLoop)
+        runCatching { audioManager?.unregisterAudioDeviceCallback(deviceCallback) }
+        scope.cancel()
         if (::player.isInitialized && player.mediaItemCount > 0) {
             UserStore.savePosition(playPosition(), player.currentPosition)
         }
@@ -206,6 +317,38 @@ class PlaybackService : MediaSessionService() {
 
     /** Reconstruit l'adresse du fichier à partir de l'identifiant du morceau. */
     private inner class SessionCallback : MediaSession.Callback {
+        override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
+            val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+                .add(androidx.media3.session.SessionCommand(CMD_FAVORITE, android.os.Bundle.EMPTY))
+                .add(androidx.media3.session.SessionCommand(CMD_SHUFFLE, android.os.Bundle.EMPTY))
+                .build()
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                .setAvailableSessionCommands(commands)
+                .build()
+        }
+
+        override fun onCustomCommand(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            customCommand: androidx.media3.session.SessionCommand,
+            args: android.os.Bundle,
+        ): ListenableFuture<androidx.media3.session.SessionResult> {
+            when (customCommand.customAction) {
+                CMD_FAVORITE -> player.currentMediaItem?.mediaId?.toLongOrNull()?.let { UserStore.toggleFavorite(it) }
+                CMD_SHUFFLE -> {
+                    val on = !player.shuffleModeEnabled
+                    player.shuffleModeEnabled = on
+                    if (on && player.mediaItemCount > 1) {
+                        val cur = player.currentMediaItemIndex
+                        val order = listOf(cur) + (0 until player.mediaItemCount).filter { it != cur }.shuffled()
+                        player.setShuffleOrder(androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder(order.toIntArray(), System.nanoTime()))
+                    }
+                }
+            }
+            updateButtons()
+            return Futures.immediateFuture(androidx.media3.session.SessionResult(androidx.media3.session.SessionResult.RESULT_SUCCESS))
+        }
+
         override fun onAddMediaItems(
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo,

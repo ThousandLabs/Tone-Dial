@@ -16,7 +16,9 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 - Balayage gauche / droite sur la barre de lecture ou la pochette pour changer de titre
 - Favoris et playlists automatiques : les plus écoutés, écoutés récemment, ajoutés récemment
 - Playlists personnelles (créer, renommer, changer l'image, supprimer, ajouter ou retirer des titres), avec un écran d'ajout qui masque les titres déjà présents, un tri propre à chaque playlist et une réorganisation par glisser-déposer
-- Égaliseur avec préréglages, amplificateur de basses et effet d'espace
+- Égaliseur avec préréglages, amplificateur de basses et effet d'espace, option « Sauter les silences »
+- Boutons Favori et Aléatoire dans la notification, reprise automatique en branchant des écouteurs ou le Bluetooth
+- Bibliothèque mise à jour automatiquement, titres masqués un par un, recherche des titres en double
 - Paroles : intégrées au fichier (MP3, FLAC), fichier `.lrc`, recherche automatique sur LRCLIB, recherche Google et collage, avec défilement synchronisé
 - Minuterie de sommeil (durée ou fin du titre), avec baisse progressive du son
 - Widget d'écran d'accueil et raccourcis sur l'icône (Aléatoire, Reprendre, Rechercher)
@@ -30,6 +32,7 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 
 ## Nouveautés
 
+- **1.32** : grande mise à jour. Bibliothèque mise à jour toute seule quand on télécharge ou supprime une musique ; titre illisible sauté automatiquement au lieu de bloquer la lecture ; boutons Favori et Aléatoire dans la notification et sur l'écran verrouillé ; reprise de la lecture en branchant des écouteurs ou une enceinte Bluetooth (réglage) ; « Sauter les silences » ; appui long sur Précédent / Suivant pour reculer ou avancer de 10 s ; artiste et album cliquables dans le lecteur ; taille du texte des paroles réglable ; recherche sans accents, à plusieurs mots, avec les recherches récentes ; « Masquer ce titre » et écran « Titres masqués » ; écran « Titres en double » ; « Annuler » après avoir retiré un titre de la file ; temps d'écoute des statistiques corrigé en vitesse modifiée.
 - **1.31** : déplacement des titres plus rapide dans la file d'attente et les playlists : la liste défile toute seule quand on tient un titre près d'un bord (de plus en plus vite), le titre reste sous le doigt, et « Déplacer à la position… » (avec « En premier » et « En dernier ») pour l'envoyer directement à une place précise.
 - **1.30** : les recherches groupées (openings, paroles, romaji) continuent quand on quitte l'appli, avec une notification de progression et un bouton « Arrêter », et reprennent au lancement suivant si elles ont été interrompues ; nouvel écran « Voir les openings identifiés » (Identifiés, Non trouvés, Pas encore cherchés).
 - **1.27** : paroles des chansons japonaises en romaji (lettres latines) : version transcrite choisie en priorité sur LRCLIB, réglage « Paroles japonaises en romaji » et bouton pour passer en romaji les paroles japonaises déjà enregistrées.

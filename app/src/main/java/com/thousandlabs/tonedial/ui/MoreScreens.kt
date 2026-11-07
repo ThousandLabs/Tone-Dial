@@ -425,3 +425,90 @@ fun OpeningsStatusScreen(vm: MainViewModel, nav: Nav) {
         }
     }
 }
+
+/** Titres masqués un par un, avec un bouton pour les réafficher. */
+@Composable
+fun HiddenSongsScreen(vm: MainViewModel, nav: Nav) {
+    val hidden by vm.hiddenSongs.collectAsStateWithLifecycle()
+    val all by vm.allSongs.collectAsStateWithLifecycle()
+    val list = remember(hidden, all) { vm.hiddenSongList().sortedBy { it.title.lowercase() } }
+    Column(Modifier.fillMaxSize()) {
+        BackTopBar("Titres masqués", nav.back)
+        if (list.isEmpty()) {
+            EmptyState(Icons.Outlined.VisibilityOff, "Aucun titre masqué", "Pour cacher un titre sans supprimer le fichier : menu du titre > « Masquer ce titre ».")
+            return@Column
+        }
+        Text(
+            "Ces titres n'apparaissent plus dans la bibliothèque, mais les fichiers restent sur le téléphone.",
+            style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
+        )
+        LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+            items(list, key = { it.id }) { song ->
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Artwork(song.art(), size = 46.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
+                        Text(song.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim)
+                    }
+                    TextButton(onClick = { vm.unhideSong(song.id) }) {
+                        Icon(Icons.Outlined.Visibility, null, modifier = Modifier.size(18.dp), tint = TdColors.Accent)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Réafficher", color = TdColors.Accent)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Fichiers présents plusieurs fois : même titre, même artiste, durée à 3 secondes près. */
+@Composable
+fun DuplicatesScreen(vm: MainViewModel, nav: Nav) {
+    val songs by vm.songs.collectAsStateWithLifecycle()
+    val groups = remember(songs) { vm.duplicateGroups() }
+    Column(Modifier.fillMaxSize()) {
+        BackTopBar("Titres en double", nav.back)
+        if (groups.isEmpty()) {
+            EmptyState(Icons.Outlined.ContentCopy, "Aucun doublon", "Chaque titre de la bibliothèque n'est présent qu'une fois.")
+            return@Column
+        }
+        Text(
+            "${groups.size} titre(s) en plusieurs exemplaires. Comparez l'emplacement et la taille, puis supprimez la copie en trop avec la corbeille (le fichier est vraiment effacé, après confirmation), ou masquez-la depuis son menu.",
+            style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
+        )
+        LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+            groups.forEach { group ->
+                item(key = "g" + group.first().id) {
+                    Text(
+                        "${group.first().title} · ${group.size} exemplaires",
+                        style = MaterialTheme.typography.titleSmall, color = TdColors.Accent,
+                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 4.dp),
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                items(group, key = { it.id }) { song ->
+                    Row(
+                        Modifier.fillMaxWidth().clickable { nav.openMenu(song, null) }.padding(horizontal = 16.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Artwork(song.art(), size = 42.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(song.path.substringAfterLast('/'), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                "${song.folderPath.substringAfterLast('/')} · ${"%.1f".format(song.size / 1_048_576.0).replace('.', ',')} Mo · ${song.path.substringAfterLast('.', "").uppercase()} · ${com.thousandlabs.tonedial.data.formatDuration(song.duration)}",
+                                maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim,
+                            )
+                        }
+                        IconButton(onClick = { nav.deleteSongs(listOf(song)) }) {
+                            Icon(Icons.Outlined.DeleteOutline, "Supprimer ce fichier", tint = TdColors.TextDim)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

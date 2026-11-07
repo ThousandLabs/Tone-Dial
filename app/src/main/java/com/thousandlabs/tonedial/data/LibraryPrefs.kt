@@ -19,6 +19,17 @@ object LibraryPrefs {
     private val _overrides = MutableStateFlow<Map<Long, Override>>(emptyMap())
     val overrides: StateFlow<Map<Long, Override>> = _overrides.asStateFlow()
 
+    // ---------- Titres masqués un par un ----------
+    private val _hidden = MutableStateFlow<Set<Long>>(emptySet())
+    val hidden: StateFlow<Set<Long>> = _hidden.asStateFlow()
+
+    fun setHidden(ids: Set<Long>) {
+        _hidden.value = ids
+        UserStore.putString("hidden_songs", ids.joinToString(","))
+    }
+
+    fun isHidden(id: Long): Boolean = id in _hidden.value
+
     private var loaded = false
 
     fun load() {
@@ -28,6 +39,7 @@ object LibraryPrefs {
             val a = JSONArray(UserStore.getString("excluded_folders") ?: "[]")
             (0 until a.length()).map { a.getString(it) }.toSet()
         }.getOrDefault(emptySet())
+        _hidden.value = UserStore.getString("hidden_songs")?.split(',')?.mapNotNull { it.toLongOrNull() }?.toSet().orEmpty()
         _overrides.value = runCatching {
             val o = JSONObject(UserStore.getString("tag_overrides") ?: "{}")
             o.keys().asSequence().associate { k ->
