@@ -39,6 +39,7 @@ sealed interface Screen {
     data object Stats : Screen
     data object MissingCovers : Screen
     data object OpeningsStatus : Screen
+    data class ArtStatus(val tab: Int) : Screen
     data object HiddenSongs : Screen
     data object Duplicates : Screen
     data class AutoDetail(val kind: AutoList) : Screen
@@ -230,6 +231,7 @@ fun AppRoot(vm: MainViewModel) {
                         Screen.Stats -> StatsScreen(vm, nav)
                         Screen.MissingCovers -> MissingCoversScreen(vm, nav)
                         Screen.OpeningsStatus -> OpeningsStatusScreen(vm, nav)
+                        is Screen.ArtStatus -> ArtStatusScreen(vm, nav, s.tab)
                         Screen.HiddenSongs -> HiddenSongsScreen(vm, nav)
                         Screen.Duplicates -> DuplicatesScreen(vm, nav)
                         is Screen.AutoDetail -> AutoDetailScreen(vm, nav, s.kind)

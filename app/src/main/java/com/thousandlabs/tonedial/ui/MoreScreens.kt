@@ -512,3 +512,143 @@ fun DuplicatesScreen(vm: MainViewModel, nav: Nav) {
         }
     }
 }
+
+// ------------------------------------------------------------------
+// Pochettes et paroles : ce qui a été trouvé, et ce qui ne l'a pas été
+// ------------------------------------------------------------------
+
+private enum class ArtFilter(val label: String) { Found("Téléchargées"), Missing("Introuvables") }
+
+private fun coverSourceLabel(src: String, viaAlbum: Boolean): String =
+    when (src) {
+        "online" -> "Trouvée en ligne"
+        "gallery" -> "Choisie dans la galerie"
+        "restored" -> "Restaurée d'une sauvegarde"
+        else -> "Ajoutée"
+    } + if (viaAlbum) " · pochette de l'album" else ""
+
+private val syncedLine = Regex("""\[\d{1,2}:\d{2}""")
+
+private fun lyricsSourceLabel(src: String?, text: String): String =
+    when (src) {
+        "lrclib" -> "Téléchargées (LRCLIB)"
+        null -> "Ajoutées à la main"
+        else -> "Téléchargées ($src)"
+    } + if (syncedLine.containsMatchIn(text)) " · synchronisées" else " · texte simple"
+
+/** Deux onglets (Pochettes, Paroles), chacun avec « Téléchargées » et « Introuvables ». */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ArtStatusScreen(vm: MainViewModel, nav: Nav, startTab: Int) {
+    val songs by vm.songs.collectAsStateWithLifecycle()
+    val coverVersion by com.thousandlabs.tonedial.data.Covers.version.collectAsStateWithLifecycle()
+    val coverProgress by vm.coverProgress.collectAsStateWithLifecycle()
+    val lyricsProgress by vm.lyricsBatch.collectAsStateWithLifecycle()
+    var tab by remember { mutableIntStateOf(startTab.coerceIn(0, 1)) }
+    var filter by remember { mutableStateOf(ArtFilter.Found) }
+
+    val covers = remember(songs, coverVersion, coverProgress.missing) {
+        val added = com.thousandlabs.tonedial.data.Covers.addedCovers(songs).sortedBy { it.song.title.lowercase() }
+        val have = added.map { it.song.id }.toSet()
+        val missing = coverProgress.missing.mapNotNull { id -> songs.firstOrNull { it.id == id } }
+            .filter { it.id !in have }.sortedBy { it.title.lowercase() }
+        added to missing
+    }
+    val lyrics = remember(songs, lyricsProgress.done, lyricsProgress.finished) {
+        val all = com.thousandlabs.tonedial.data.UserStore.allLyrics()
+        val byId = songs.associateBy { it.id }
+        val found = all.mapNotNull { (id, v) -> byId[id]?.let { Triple(it, v.second, v.first) } }.sortedBy { it.first.title.lowercase() }
+        val missing = com.thousandlabs.tonedial.data.LyricsBatch.missingIds().filter { it !in all.keys }.mapNotNull { byId[it] }
+            .sortedBy { it.title.lowercase() }
+        found to missing
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        BackTopBar("Pochettes et paroles", nav.back)
+        TabRow(selectedTabIndex = tab, containerColor = TdColors.Background, contentColor = TdColors.Accent) {
+            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Pochettes") }, icon = { Icon(Icons.Outlined.Image, null) })
+            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Paroles") }, icon = { Icon(Icons.Outlined.Subject, null) })
+        }
+        val nFound = if (tab == 0) covers.first.size else lyrics.first.size
+        val nMissing = if (tab == 0) covers.second.size else lyrics.second.size
+        val running = if (tab == 0) coverProgress.running else lyricsProgress.running
+        Text(
+            "$nFound téléchargée(s) · $nMissing introuvable(s)" + if (running) " · recherche en cours, la liste se met à jour" else "",
+            style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim,
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp),
+        )
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ArtFilter.entries.forEach { f ->
+                FilterChip(
+                    selected = filter == f,
+                    onClick = { filter = f },
+                    label = { Text("${f.label} (${if (f == ArtFilter.Found) nFound else nMissing})", maxLines = 1) },
+                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = TdColors.Accent, selectedLabelColor = TdColors.Background),
+                )
+            }
+        }
+        val empty = if (filter == ArtFilter.Found) nFound == 0 else nMissing == 0
+        if (empty) {
+            EmptyState(
+                if (tab == 0) Icons.Outlined.Image else Icons.Outlined.Subject,
+                if (filter == ArtFilter.Found) "Rien pour l'instant" else "Aucun titre introuvable",
+                when {
+                    filter == ArtFilter.Found && tab == 0 -> "Lancez « Rechercher toutes les pochettes manquantes » dans les réglages."
+                    filter == ArtFilter.Found -> "Lancez la recherche des paroles dans les réglages."
+                    else -> "Tous les titres cherchés ont été trouvés."
+                },
+            )
+            return@Column
+        }
+        if (filter == ArtFilter.Missing) {
+            Text(
+                if (tab == 0) "Introuvables dans les catalogues en ligne : relancez la recherche avec la loupe (après avoir corrigé le nom si besoin) ou choisissez une image dans la galerie."
+                else "Introuvables sur LRCLIB : vérifiez le titre et l'artiste, ou ajoutez les paroles depuis l'onglet Paroles du lecteur.",
+                style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+            )
+        }
+        LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+            when {
+                tab == 0 && filter == ArtFilter.Found -> items(covers.first, key = { it.song.id }) { a ->
+                    ArtRow(a.song, coverSourceLabel(a.source, a.viaAlbum), true, onClick = { nav.openMenu(a.song, null) }) {}
+                }
+                tab == 0 -> items(covers.second, key = { it.id }) { song ->
+                    ArtRow(song, song.artist, false, onClick = { nav.openMenu(song, null) }) {
+                        IconButton(onClick = { vm.searchCover(song) }) { Icon(Icons.Outlined.ImageSearch, "Chercher en ligne", tint = TdColors.Text) }
+                        IconButton(onClick = { nav.pickCover(song) }) { Icon(Icons.Outlined.AddPhotoAlternate, "Choisir dans la galerie", tint = TdColors.Accent) }
+                    }
+                }
+                filter == ArtFilter.Found -> items(lyrics.first, key = { it.first.id }) { (song, src, text) ->
+                    ArtRow(song, lyricsSourceLabel(src, text), true, onClick = { vm.play(listOf(song)); nav.openPlayer() }) {}
+                }
+                else -> items(lyrics.second, key = { it.id }) { song ->
+                    ArtRow(song, song.artist, false, onClick = { vm.play(listOf(song)); nav.openPlayer() }) {}
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArtRow(song: Song, subtitle: String, found: Boolean, onClick: () -> Unit, actions: @Composable RowScope.() -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Artwork(song.art(), size = 46.dp)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
+            Text(
+                subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall,
+                color = if (found) TdColors.Accent else TdColors.TextDim,
+            )
+        }
+        actions()
+        if (found) Icon(Icons.Outlined.CheckCircle, "Téléchargée", tint = TdColors.Accent, modifier = Modifier.size(20.dp))
+    }
+}

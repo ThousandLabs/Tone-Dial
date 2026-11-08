@@ -15,6 +15,7 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.thousandlabs.tonedial.MainActivity
 import com.thousandlabs.tonedial.R
+import com.thousandlabs.tonedial.data.Covers
 import com.thousandlabs.tonedial.data.LyricsBatch
 import com.thousandlabs.tonedial.data.OpeningsBatch
 import kotlinx.coroutines.CoroutineScope
@@ -25,7 +26,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /**
- * Garde Tone Dial actif pendant les recherches groupées (openings, paroles, romaji)
+ * Garde Tone Dial actif pendant les recherches groupées (pochettes, images d'artistes, openings, paroles, romaji)
  * quand on quitte l'appli : Android, et surtout les téléphones Tecno, arrêtent sinon
  * le travail en arrière-plan. Une notification montre la progression, avec « Arrêter ».
  */
@@ -43,6 +44,8 @@ class BatchService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var watcher: kotlinx.coroutines.Job? = null
+    /** Garde le processeur éveillé écran éteint, seulement pendant une recherche (libéré à la fin, 3 h au plus). */
+    private var wakeLock: android.os.PowerManager.WakeLock? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -52,7 +55,7 @@ class BatchService : Service() {
         if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(CHANNEL) == null) {
             nm.createNotificationChannel(
                 NotificationChannel(CHANNEL, "Recherches en arrière-plan", NotificationManager.IMPORTANCE_LOW).apply {
-                    description = "Progression de l'identification des openings et de la recherche des paroles"
+                    description = "Progression de la recherche des pochettes, des paroles et des openings"
                     setShowBadge(false)
                 },
             )
@@ -63,6 +66,7 @@ class BatchService : Service() {
         if (intent?.action == ACTION_STOP) {
             OpeningsBatch.stop()
             LyricsBatch.stop()
+            Covers.stopBatch()
             finish()
             return START_NOT_STICKY
         }
@@ -70,12 +74,20 @@ class BatchService : Service() {
         val type = if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0
         runCatching { ServiceCompat.startForeground(this, NOTIF_ID, first, type) }.onFailure { stopSelf(); return START_NOT_STICKY }
 
+        if (wakeLock?.isHeld != true) runCatching {
+            wakeLock = getSystemService(android.os.PowerManager::class.java)
+                .newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "ToneDial:recherches")
+                .apply { setReferenceCounted(false); acquire(3 * 60 * 60 * 1000L) }
+        }
+
         watcher?.cancel()
         watcher = scope.launch {
-            combine(OpeningsBatch.progress, LyricsBatch.progress) { o, l -> o to l }.collect { (o, l) ->
+            combine(OpeningsBatch.progress, LyricsBatch.progress, Covers.progress) { o, l, c -> Triple(o, l, c) }.collect { (o, l, c) ->
                 when {
                     o.running -> notify("Identification des openings : ${o.done} / ${o.total} · ${o.found} trouvé(s)", o.done, o.total)
                     l.running -> notify("Recherche des paroles : ${l.done} / ${l.total} · ${l.found} trouvée(s)", l.done, l.total)
+                    c.running && c.artists -> notify("Images des artistes : ${c.done} / ${c.total}", c.done, c.total)
+                    c.running -> notify("Recherche des pochettes : ${c.done} / ${c.total} · ${c.found} trouvée(s)", c.done, c.total)
                     else -> finish()
                 }
             }
@@ -109,12 +121,19 @@ class BatchService : Service() {
             .build()
     }
 
+    private fun releaseWake() {
+        runCatching { if (wakeLock?.isHeld == true) wakeLock?.release() }
+        wakeLock = null
+    }
+
     private fun finish() {
+        releaseWake()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
     override fun onDestroy() {
+        releaseWake()
         scope.cancel()
         super.onDestroy()
     }

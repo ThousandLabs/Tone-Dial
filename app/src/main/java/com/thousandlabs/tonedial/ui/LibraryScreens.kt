@@ -1014,7 +1014,7 @@ fun SettingsScreen(vm: MainViewModel, nav: Nav) {
                     onClick = { nav.go(Screen.OpeningsStatus) },
                 )
                 SectionLabel("Paroles")
-                LyricsSettings(vm)
+                LyricsSettings(vm, nav)
                 SectionLabel("Son")
                 ListItemRow(Icons.Outlined.Equalizer, "Égaliseur et basses", onClick = { nav.go(Screen.Equalizer) })
                 SectionLabel("Sauvegarde")
@@ -1173,7 +1173,8 @@ private fun CoverSettings(vm: MainViewModel, nav: Nav) {
     if (progress.running) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
             Text(
-                "Recherche des pochettes : ${progress.done} / ${progress.total} · ${progress.found} trouvée(s)",
+                if (progress.artists) "Images des artistes : ${progress.done} / ${progress.total}"
+                else "Recherche des pochettes : ${progress.done} / ${progress.total} · ${progress.found} trouvée(s)",
                 style = MaterialTheme.typography.bodyMedium,
             )
             Spacer(Modifier.height(6.dp))
@@ -1184,7 +1185,7 @@ private fun CoverSettings(vm: MainViewModel, nav: Nav) {
                 trackColor = TdColors.Divider,
             )
             Text(
-                "Quelques secondes par titre. Vous pouvez utiliser l'appli normalement pendant ce temps.",
+                "Quelques secondes par titre. La recherche continue si vous quittez l'appli ou éteignez l'écran (notification « Recherches en arrière-plan »), et reprend seule si elle est interrompue.",
                 style = MaterialTheme.typography.bodySmall, color = TdColors.TextDim,
                 modifier = Modifier.padding(top = 6.dp),
             )
@@ -1197,6 +1198,11 @@ private fun CoverSettings(vm: MainViewModel, nav: Nav) {
             onClick = { vm.startCoverSearch() },
         )
     }
+    ListItemRow(
+        Icons.Outlined.FactCheck, "Pochettes téléchargées et introuvables",
+        subtitle = "La liste des titres qui ont reçu une pochette, avec son origine, et de ceux qui n'en ont pas",
+        onClick = { nav.go(Screen.ArtStatus(0)) },
+    )
     if (progress.missing.isNotEmpty()) {
         ListItemRow(
             Icons.Outlined.HideImage, "Titres sans pochette (${progress.missing.size})",
@@ -1279,8 +1285,13 @@ fun TabOrderDialog(current: List<HomeTab>, onDismiss: () -> Unit, onSave: (List<
 
 
 @Composable
-private fun LyricsSettings(vm: MainViewModel) {
+private fun LyricsSettings(vm: MainViewModel, nav: Nav) {
     val progress by vm.lyricsBatch.collectAsStateWithLifecycle()
+    ListItemRow(
+        Icons.Outlined.FactCheck, "Paroles téléchargées et introuvables",
+        subtitle = "La liste des titres qui ont des paroles, avec leur origine (synchronisées ou non), et de ceux qui n'en ont pas",
+        onClick = { nav.go(Screen.ArtStatus(1)) },
+    )
     var auto by remember { mutableStateOf(com.thousandlabs.tonedial.data.LyricsBatch.autoEnabled()) }
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),

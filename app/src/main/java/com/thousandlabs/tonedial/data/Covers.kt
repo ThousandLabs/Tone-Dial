@@ -95,7 +95,7 @@ object Covers {
             saveArtistFailed()
             return@withContext false
         }
-        save(artistFileName(name), bmp)
+        save(artistFileName(name), bmp, "online")
         artistFailed -= key
         true
     }
@@ -148,7 +148,7 @@ object Covers {
     suspend fun saveSongImage(songId: Long, url: String): Boolean = withContext(Dispatchers.IO) {
         if (!::dir.isInitialized) return@withContext false
         val bmp = CoverSearch.download(url)?.let { ArtBytes.decode(it, 600) } ?: return@withContext false
-        save(songName(songId), bmp)
+        save(songName(songId), bmp, "online")
         true
     }
 
@@ -164,6 +164,7 @@ object Covers {
         if (f.exists() && stamps.containsKey(name)) return false
         f.writeBytes(bytes)
         stamps[name] = System.currentTimeMillis()
+        setSource(name, "restored")
         _version.value++
         return true
     }
@@ -181,7 +182,7 @@ object Covers {
         runCatching {
             val bytes = context.contentResolver.openInputStream(image)?.use { it.readBytes() } ?: return@runCatching false
             val bmp = ArtBytes.decode(bytes, 800) ?: return@runCatching false
-            save(playlistName(id), bmp)
+            save(playlistName(id), bmp, "gallery")
             true
         }.getOrDefault(false)
     }
@@ -193,11 +194,42 @@ object Covers {
         _version.value++
     }
 
-    private fun save(name: String, bmp: Bitmap) {
+    private fun save(name: String, bmp: Bitmap, source: String) {
         val f = File(dir, name)
         f.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 90, it) }
         stamps[name] = System.currentTimeMillis()
+        setSource(name, source)
         _version.value++
+    }
+
+    // ---------- Origine de chaque image (en ligne, galerie, restaurée) ----------
+    private val sources = ConcurrentHashMap<String, String>()
+    private var sourcesLoaded = false
+    private fun loadSources() {
+        if (sourcesLoaded) return
+        sourcesLoaded = true
+        runCatching { val o = JSONObject(UserStore.getString("cover_src") ?: "{}"); o.keys().forEach { sources[it] = o.getString(it) } }
+    }
+    private fun setSource(name: String, source: String?) {
+        loadSources()
+        if (source == null) sources.remove(name) else sources[name] = source
+        UserStore.putString("cover_src", JSONObject(sources as Map<*, *>).toString())
+    }
+
+    /** Une pochette ajoutée par l'appli pour un titre (titre ou album). */
+    data class Added(val song: Song, val source: String, val viaAlbum: Boolean)
+
+    /** Tous les titres qui ont une pochette ajoutée par Tone Dial, avec son origine (online, gallery, restored, added). */
+    fun addedCovers(library: List<Song>): List<Added> {
+        if (!::dir.isInitialized) return emptyList()
+        loadSources()
+        return library.mapNotNull { s ->
+            when {
+                stamps.containsKey(songName(s.id)) -> Added(s, sources[songName(s.id)] ?: "added", false)
+                stamps.containsKey(albumName(s.albumId)) -> Added(s, sources[albumName(s.albumId)] ?: "added", true)
+                else -> null
+            }
+        }
     }
 
     /** Pochette choisie par l'utilisateur dans sa galerie. */
@@ -205,7 +237,7 @@ object Covers {
         runCatching {
             val bytes = context.contentResolver.openInputStream(image)?.use { it.readBytes() } ?: return@runCatching false
             val bmp = ArtBytes.decode(bytes, 800) ?: return@runCatching false
-            save(songName(songId), bmp)
+            save(songName(songId), bmp, "gallery")
             true
         }.getOrDefault(false)
     }
@@ -214,6 +246,7 @@ object Covers {
         if (!::dir.isInitialized) return
         File(dir, songName(songId)).delete()
         stamps.remove(songName(songId))
+        setSource(songName(songId), null)
         _version.value++
     }
 
@@ -272,7 +305,7 @@ object Covers {
         val found = runCatching { CoverSearch.find(song) }.getOrNull() ?: return@withContext false
         val bytes = CoverSearch.download(found.imageUrl) ?: return@withContext false
         val bmp = ArtBytes.decode(bytes, 600) ?: return@withContext false
-        save(if (realAlbum) albumName(song.albumId) else songName(song.id), bmp)
+        save(if (realAlbum) albumName(song.albumId) else songName(song.id), bmp, "online")
         true
     }
 
@@ -287,6 +320,8 @@ object Covers {
         val found: Int = 0,
         val finished: Boolean = false,
         val missing: List<Long> = emptyList(),
+        /** Deuxième étape : images des artistes. */
+        val artists: Boolean = false,
     )
 
     private val _progress = MutableStateFlow(Progress())
@@ -317,6 +352,10 @@ object Covers {
     fun startBatch(context: Context, songs: List<Song>) {
         if (job?.isActive == true) return
         val app = context.applicationContext
+        // protégée par la notification « Recherches en arrière-plan » : continue hors de l'appli et écran éteint
+        UserStore.putString("covers_batch_pending", "1")
+        _progress.value = Progress(running = true)
+        com.thousandlabs.tonedial.playback.BatchService.start(app)
         job = scope.launch {
             cleanupFakeAlbums(songs)
             // un représentant par vrai album, chaque titre sinon
@@ -337,19 +376,28 @@ object Covers {
                 }
                 _progress.value = Progress(running = true, done = i + 1, total = tasks.size, found = found, missing = missing.toList())
             }
-            _progress.value = Progress(running = false, done = tasks.size, total = tasks.size, found = found, finished = true, missing = missing.toList())
             saveMissing(missing)
             // puis les images des artistes (nouvel essai pour ceux qui avaient échoué)
             artistFailed.clear()
             val artists = songs.flatMap { s -> s.artists.filter { it != "Artiste inconnu" }.map { it to looksAnime(s) } }
-            artists.distinctBy { it.first.lowercase() }.forEach { (name, anime) ->
+                .distinctBy { it.first.lowercase() }
+            artists.forEachIndexed { i, (name, anime) ->
                 if (!isActive) return@launch
+                _progress.value = Progress(running = true, done = i, total = artists.size, found = found, missing = missing.toList(), artists = true)
                 if (artistFile(name) == null) {
                     fetchArtistImage(name, anime, force = true)
                     delay(300)
                 }
             }
+            UserStore.putString("covers_batch_pending", "")
+            _progress.value = Progress(running = false, done = tasks.size, total = tasks.size, found = found, finished = true, missing = missing.toList())
         }
+    }
+
+    /** Reprend une recherche interrompue (appli fermée de force, téléphone redémarré) ; les titres déjà traités sont sautés. */
+    fun resumeIfNeeded(context: Context, songs: List<Song>) {
+        if (job?.isActive == true || songs.isEmpty()) return
+        if (UserStore.getString("covers_batch_pending") == "1") startBatch(context, songs)
     }
 
     private val animeWords = Regex("""\b(opening|op|ending|ed)\s*\d{1,3}\b""", RegexOption.IGNORE_CASE)
@@ -360,6 +408,7 @@ object Covers {
 
     fun stopBatch() {
         job?.cancel()
+        UserStore.putString("covers_batch_pending", "")
         _progress.value = _progress.value.copy(running = false, finished = true)
     }
 

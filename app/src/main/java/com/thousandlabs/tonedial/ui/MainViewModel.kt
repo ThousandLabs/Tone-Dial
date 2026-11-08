@@ -165,6 +165,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // recherches groupées interrompues (appli fermée de force…) : elles reprennent
             com.thousandlabs.tonedial.data.OpeningsBatch.resumeIfNeeded(ctx, visibleOriginals())
             com.thousandlabs.tonedial.data.LyricsBatch.resumeIfNeeded(ctx, _songs.value)
+            com.thousandlabs.tonedial.data.Covers.resumeIfNeeded(ctx, _songs.value)
         }
     }
 

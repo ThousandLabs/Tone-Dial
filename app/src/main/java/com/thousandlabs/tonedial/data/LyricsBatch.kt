@@ -35,6 +35,7 @@ object LyricsBatch {
         BatchService.start(app)
         job = scope.launch {
             var found = 0
+            val missing = LinkedHashSet(missingIds())
             songs.forEachIndexed { i, song ->
                 if (!isActive) return@launch
                 val has = runCatching { LyricsLoader.load(app, song) }.getOrNull()?.lines?.isNotEmpty() == true
@@ -42,12 +43,15 @@ object LyricsBatch {
                     val text = LyricsOnline.find(song)
                     if (text != null) {
                         UserStore.setCustomLyrics(song.id, text, source = "lrclib")
+                        missing -= song.id
                         found++
-                    }
+                    } else missing += song.id
                     delay(350)
-                }
+                } else missing -= song.id
                 _progress.value = Progress(running = true, done = i + 1, total = songs.size, found = found)
+                if ((i + 1) % 20 == 0) saveMissing(missing)
             }
+            saveMissing(missing)
             UserStore.putString("lyrics_batch_pending", "")
             _progress.value = Progress(done = songs.size, total = songs.size, found = found, finished = true)
         }
@@ -90,6 +94,14 @@ object LyricsBatch {
             "romaji" -> startRomaji(context, songs)
         }
     }
+
+    /** Titres pour lesquels aucune parole n'a été trouvée en ligne (dernières recherches). */
+    fun missingIds(): List<Long> = runCatching {
+        val a = org.json.JSONArray(UserStore.getString("lyrics_missing") ?: "[]")
+        (0 until a.length()).map { a.getLong(it) }
+    }.getOrDefault(emptyList())
+
+    private fun saveMissing(ids: Collection<Long>) = UserStore.putString("lyrics_missing", org.json.JSONArray(ids.toList()).toString())
 
     fun stop() {
         job?.cancel()
