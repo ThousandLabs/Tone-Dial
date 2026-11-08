@@ -32,9 +32,9 @@ import java.util.UUID
  */
 object Licence {
 
-    /** Clé publique Tone Dial (générée dans Thousand Admin, onglet Tone Dial). Vide = pas encore installée. */
-    private const val PUB_X = ""
-    private const val PUB_Y = ""
+    /** Clé publique Tone Dial (générée dans Thousand Admin, onglet Tone Dial, le 8 nov. 2026). */
+    private const val PUB_X = "YcMriH32SZWIpFRRsA2AeuSD9IRVF6G6TTd7rGPECyE"
+    private const val PUB_Y = "VyK9a5CTwUJ_M-9-p1d139cCmpPWqA4lCezIp352Nt4"
 
     const val PRICE = "1 000 F"
     const val WAVE_URL = "https://pay.wave.com/m/M_sn_2435mflS4o9D/c/sn/"
