@@ -266,6 +266,26 @@ object UserStore {
         prefs.edit().putString("play_counts", JSONObject(counts.mapKeys { it.key.toString() }).toString()).apply()
     }
 
+    fun has(key: String) = prefs.contains(key)
+
+    /** Restauration : garde la date d'écoute la plus récente de chaque titre. */
+    fun mergeLastPlayed(m: Map<Long, Long>) {
+        if (m.isEmpty()) return
+        val last = _lastPlayed.value.toMutableMap()
+        m.forEach { (k, v) -> if (v > (last[k] ?: 0L)) last[k] = v }
+        _lastPlayed.value = last
+        prefs.edit().putString("last_played", JSONObject(last.mapKeys { it.key.toString() }).toString()).apply()
+    }
+
+    /** Restauration de l'ordre des onglets (les onglets inconnus sont ignorés, les nouveaux ajoutés à la fin). */
+    fun restoreTabOrder(saved: List<String>) {
+        if (saved.isEmpty()) return
+        val cur = _tabOrder.value
+        if (cur.isEmpty()) { prefs.edit().putString("tab_order", saved.joinToString(",")).apply(); return }
+        val s = saved.filter { it in cur }
+        setTabOrder(s + cur.filterNot { it in s })
+    }
+
     fun getInt(key: String, def: Int) = prefs.getInt(key, def)
     fun putInt(key: String, value: Int) = prefs.edit().putInt(key, value).apply()
     fun getBool(key: String, def: Boolean) = prefs.getBoolean(key, def)

@@ -33,7 +33,7 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 - Pochettes manquantes recherchées en ligne (Deezer, iTunes, MyAnimeList et AnimeThemes pour les openings) même avec des noms de fichiers abîmés, ou choisies dans la galerie ; fond du lecteur aux couleurs de la pochette
 - Vitesse de lecture de 0,5× à 2× sans changement de tonalité
 - Statistiques d'écoute (7 jours, 30 jours, depuis toujours)
-- Sauvegarde et restauration des playlists, favoris, paroles et réglages
+- Sauvegarde complète en un seul fichier : playlists, favoris, écoutes et statistiques, paroles, corrections, pochettes et images, ordre des onglets et tous les réglages
 - Définir un titre comme sonnerie, partager ou supprimer un fichier, informations détaillées
 - Reprise automatique de la lecture là où elle s'était arrêtée
 

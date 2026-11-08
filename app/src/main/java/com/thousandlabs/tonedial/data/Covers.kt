@@ -152,6 +152,22 @@ object Covers {
         true
     }
 
+    // ---------- Sauvegarde ----------
+    /** Toutes les images gardées par l'appli (titres, albums, artistes, playlists). */
+    fun allFiles(): List<File> =
+        if (!::dir.isInitialized) emptyList() else dir.listFiles()?.filter { it.isFile && it.name.endsWith(".jpg") && it.length() > 0 }.orEmpty()
+
+    /** Restauration d'une image ; une image déjà présente ici n'est pas remplacée. Renvoie true si ajoutée. */
+    fun restoreFile(name: String, bytes: ByteArray): Boolean {
+        if (!::dir.isInitialized || !Regex("^(song|album|artist|playlist)_[A-Za-z0-9-]+\\.jpg$").matches(name) || bytes.isEmpty()) return false
+        val f = File(dir, name)
+        if (f.exists() && stamps.containsKey(name)) return false
+        f.writeBytes(bytes)
+        stamps[name] = System.currentTimeMillis()
+        _version.value++
+        return true
+    }
+
     // ---------- Images des playlists ----------
     private fun playlistName(id: Long) = "playlist_$id.jpg"
 

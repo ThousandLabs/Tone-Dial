@@ -98,6 +98,35 @@ object ListenStats {
         _version.value++
     }
 
+    /** Statistiques complètes pour la sauvegarde. */
+    @Synchronized
+    fun exportJson(): JSONObject {
+        save()
+        return JSONObject().apply {
+            put("days", JSONObject(UserStore.getString(KEY_DAYS) ?: "{}"))
+            put("total", totalMs)
+            put("songs", JSONObject(UserStore.getString(KEY_SONG_TIME) ?: "{}"))
+        }
+    }
+
+    /** Restauration : fusion par maximum (restaurer deux fois la même sauvegarde ne double rien). */
+    @Synchronized
+    fun importJson(o: JSONObject, map: (Long) -> Long?) {
+        val m = ensure()
+        o.optJSONObject("days")?.let { dj ->
+            dj.keys().forEach { k ->
+                val src = dj.getJSONObject(k)
+                val d = m.getOrPut(k) { Day() }
+                d.ms = maxOf(d.ms, src.optLong("ms"))
+                src.optJSONObject("s")?.let { s -> s.keys().forEach { id -> map(id.toLong())?.let { n -> d.songMs[n] = maxOf(d.songMs[n] ?: 0L, s.getLong(id)) } } }
+                src.optJSONObject("p")?.let { p -> p.keys().forEach { id -> map(id.toLong())?.let { n -> d.plays[n] = maxOf(d.plays[n] ?: 0, p.getInt(id)) } } }
+            }
+        }
+        totalMs = maxOf(totalMs, o.optLong("total"))
+        o.optJSONObject("songs")?.let { sj -> sj.keys().forEach { id -> map(id.toLong())?.let { n -> songTime[n] = maxOf(songTime[n] ?: 0L, sj.getLong(id)) } } }
+        save()
+    }
+
     data class Summary(
         val totalMs: Long,
         val plays: Map<Long, Int>,

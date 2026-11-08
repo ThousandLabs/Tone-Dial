@@ -1209,20 +1209,20 @@ private fun CoverSettings(vm: MainViewModel, nav: Nav) {
 @Composable
 private fun BackupSettings(vm: MainViewModel) {
     val exportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")
+        androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/zip")
     ) { uri -> if (uri != null) vm.exportBackup(uri) }
     val importLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
     ) { uri -> if (uri != null) vm.importBackup(uri) }
     ListItemRow(
         Icons.Outlined.Backup, "Sauvegarder mes données",
-        subtitle = "Playlists, favoris, écoutes, paroles, corrections et réglages dans un fichier",
+        subtitle = "Tout dans un seul fichier : playlists, favoris, écoutes, statistiques, paroles, pochettes, ordre des onglets et réglages",
         onClick = { exportLauncher.launch(com.thousandlabs.tonedial.data.Backup.suggestedName()) },
     )
     ListItemRow(
         Icons.Outlined.Restore, "Restaurer une sauvegarde",
-        subtitle = "Sur ce téléphone ou un nouveau. Les playlists du même nom sont fusionnées.",
-        onClick = { importLauncher.launch(arrayOf("application/json", "application/octet-stream", "text/plain", "*/*")) },
+        subtitle = "Sur ce téléphone ou un nouveau. Les playlists du même nom sont fusionnées. Les anciennes sauvegardes (.json) restent acceptées.",
+        onClick = { importLauncher.launch(arrayOf("application/zip", "application/json", "application/octet-stream", "text/plain", "*/*")) },
     )
     Text(
         "Conseil : enregistrez la sauvegarde dans Google Drive ou envoyez-la-vous par WhatsApp, pour la retrouver si vous changez de téléphone.",

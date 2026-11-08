@@ -327,7 +327,8 @@ private val guide = listOf(
     GuideSection(
         Icons.Outlined.Backup, "Sauvegarde",
         listOf(
-            "Menu > Réglages > « Sauvegarder mes données » crée un fichier avec vos playlists, favoris, écoutes, paroles, corrections, dossiers masqués et réglages.",
+            "Menu > Réglages > « Sauvegarder mes données » crée un seul fichier (.zip) qui regroupe tout : playlists, favoris, écoutes et statistiques, paroles, corrections, openings identifiés, pochettes (trouvées en ligne ou choisies dans la galerie), images des playlists et des artistes, dossiers et titres masqués, ordre des onglets et tous les réglages.",
+            "Les anciennes sauvegardes (.json) restent acceptées, mais elles ne contiennent ni les pochettes ni l'ordre des onglets : refaites une sauvegarde avec cette version.",
             "Enregistrez-le dans Google Drive ou envoyez-le-vous par WhatsApp. Sur un nouveau téléphone, installez Tone Dial puis « Restaurer une sauvegarde » : les titres sont retrouvés par leur emplacement, sinon par titre et artiste.",
             "Faites une sauvegarde de temps en temps : si l'appli est désinstallée, ses données sont effacées par Android.",
         ),

@@ -489,7 +489,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun exportBackup(target: Uri) {
         viewModelScope.launch {
             com.thousandlabs.tonedial.data.Backup.export(ctx, target, _allSongs.value)
-                .onSuccess { _messages.tryEmit("Sauvegarde enregistrée ($it playlists)") }
+                .onSuccess { _messages.tryEmit("Sauvegarde enregistrée : ${it.playlists} playlist(s), ${it.images} image(s)") }
                 .onFailure { _messages.tryEmit("Échec de la sauvegarde : ${it.message ?: "erreur"}") }
         }
     }
@@ -499,9 +499,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             com.thousandlabs.tonedial.data.Backup.import(ctx, source, _allSongs.value.map { com.thousandlabs.tonedial.data.LibraryPrefs.apply(it) })
                 .onSuccess { r ->
                     UserStore.setMinDurationSec(UserStore.getInt("min_duration_sec", 30))
+                    setSpeed(UserStore.getInt("speed_pct", 100) / 100f)
                     loadLibrary()
                     _messages.tryEmit(
                         "Restauré : ${r.playlists} playlist(s), ${r.matched} titre(s) retrouvé(s)" +
+                            (if (r.images > 0) ", ${r.images} image(s)" else "") +
                             if (r.missing > 0) ", ${r.missing} introuvable(s) sur ce téléphone" else ""
                     )
                 }

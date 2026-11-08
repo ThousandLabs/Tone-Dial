@@ -59,6 +59,16 @@ object OpeningsBatch {
         UserStore.putString("openings_status", o.toString())
     }
 
+    /** Restauration : ajoute les openings identifiés de la sauvegarde (sans écraser ceux d'ici). */
+    fun mergeStatus(m: Map<Long, String>) {
+        if (m.isEmpty()) return
+        load()
+        val cur = _status.value.toMutableMap()
+        m.forEach { (id, a) -> if (id !in cur) cur[id] = Status(a.ifBlank { null }) }
+        _status.value = cur
+        saveStatus()
+    }
+
     fun statusMap(): Map<Long, Status> {
         load()
         return _status.value
