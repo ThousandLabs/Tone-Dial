@@ -347,6 +347,16 @@ private val guide = listOf(
         ),
     ),
     GuideSection(
+        Icons.Outlined.Key, "Essai gratuit et activation",
+        listOf(
+            "Tone Dial s'essaie gratuitement pendant 48 heures, avec toutes les fonctions. Ensuite, elle coûte 1 000 F, une seule fois, sans abonnement.",
+            "Pour l'acheter : Menu > À propos > « Acheter ou activer ». Payez par Wave (bouton « Payer avec Wave »), par Orange Money au 71 121 65 81 ou en espèces, puis envoyez votre code appareil (TD-XXXX-XXXX) sur WhatsApp.",
+            "Vous recevez un code d'activation : collez-le et touchez « Activer ». C'est définitif : plus besoin de le saisir, même après une mise à jour.",
+            "Le code est lié à ce téléphone. Si vous réinstallez Tone Dial sur le même téléphone, le même code fonctionne à nouveau : gardez-le dans vos messages.",
+            "À la fin de l'essai, vos playlists, favoris et réglages sont conservés : ils réapparaissent dès l'activation.",
+        ),
+    ),
+    GuideSection(
         Icons.Outlined.SystemUpdate, "Mises à jour",
         listOf(
             "Quand une nouvelle version existe, un bandeau apparaît en haut de l'accueil. Appuyez sur « Mettre à jour », puis confirmez dans la fenêtre d'Android : c'est tout.",
@@ -441,6 +451,8 @@ fun AboutScreen(nav: Nav) {
                 }
             }
             item {
+                SectionLabel("Licence")
+                com.thousandlabs.tonedial.licence.LicenceSection()
                 SectionLabel("Mises à jour")
                 UpdateSection()
                 ListItemRow(Icons.Outlined.NewReleases, "Historique des versions", subtitle = "Nouveautés de chaque version", onClick = { open(RELEASES_URL) })

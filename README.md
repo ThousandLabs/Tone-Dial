@@ -4,6 +4,13 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 
 **Télécharger la dernière version : [ToneDial.apk](https://github.com/ThousandLabs/Tone-Dial/releases/latest/download/ToneDial.apk)**
 
+## Prix et activation
+
+- **Essai gratuit de 48 h**, avec toutes les fonctions.
+- Ensuite **1 000 F, une seule fois** (sans abonnement) : paiement Wave, Orange Money (71 121 65 81) ou espèces, puis code d'activation envoyé sur WhatsApp.
+- Le code est lié au téléphone et gardé pour toujours : plus besoin de le saisir, même après une mise à jour ou une réinstallation sur le même téléphone.
+- Site officiel : https://thousandlabs.github.io
+
 ## Fonctions
 
 - Détection automatique de toutes les musiques du téléphone (MP3, FLAC, AAC, WAV, OGG…)

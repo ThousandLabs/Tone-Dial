@@ -132,6 +132,8 @@ class PlaybackService : MediaSessionService() {
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                // essai terminé et appli non activée : pas de lecture (widget, notification, écouteurs)
+                if (isPlaying && !com.thousandlabs.tonedial.licence.Licence.canUse(this@PlaybackService)) { player.pause(); return }
                 // compte le temps écoulé depuis le dernier relevé, puis repart de zéro
                 val now = android.os.SystemClock.elapsedRealtime()
                 val id = player.currentMediaItem?.mediaId?.toLongOrNull()

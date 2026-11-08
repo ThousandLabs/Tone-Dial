@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.thousandlabs.tonedial
 
 import android.Manifest
@@ -29,6 +31,10 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.thousandlabs.tonedial.licence.ActivationDialog
+import com.thousandlabs.tonedial.licence.Licence
+import com.thousandlabs.tonedial.licence.LockScreen
+import com.thousandlabs.tonedial.licence.TrialBanner
 import com.thousandlabs.tonedial.ui.AppRoot
 import com.thousandlabs.tonedial.ui.MainViewModel
 import com.thousandlabs.tonedial.ui.TdColors
@@ -77,8 +83,40 @@ class MainActivity : ComponentActivity() {
                     if (granted) vm.loadLibrary()
                 }
 
-                if (granted) {
-                    AppRoot(vm)
+                // Licence : essai gratuit 48 h puis code d'activation (vérifié hors ligne, gardé pour toujours)
+                val ctx = this@MainActivity
+                var lic by remember { mutableStateOf(Licence.state(ctx)) }
+                var trialLeft by remember { mutableLongStateOf(Licence.trialLeft(ctx)) }
+                var activationOpen by remember { mutableStateOf(false) }
+                LaunchedEffect(lic) {
+                    while (lic == Licence.State.TRIAL) {
+                        trialLeft = Licence.trialLeft(ctx)
+                        lic = Licence.state(ctx)
+                        kotlinx.coroutines.delay(30_000)
+                    }
+                }
+                DisposableEffect(lifecycleOwner) {
+                    val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_RESUME) lic = Licence.state(ctx) }
+                    lifecycleOwner.lifecycle.addObserver(obs)
+                    onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+                }
+                LaunchedEffect(lic) {
+                    // essai terminé : la musique s'arrête (les données sont gardées)
+                    if (lic == Licence.State.EXPIRED && vm.player.value.isPlaying) vm.togglePlay()
+                }
+
+                if (lic == Licence.State.NEW || lic == Licence.State.EXPIRED) {
+                    LockScreen(
+                        state = lic,
+                        onTrial = { Licence.startTrial(ctx); trialLeft = Licence.trialLeft(ctx); lic = Licence.state(ctx) },
+                        onActivated = { lic = Licence.State.ACTIVE },
+                    )
+                } else if (granted) {
+                    Column(Modifier.fillMaxSize().background(TdColors.Background)) {
+                        if (lic == Licence.State.TRIAL) TrialBanner(trialLeft) { activationOpen = true }
+                        Box(Modifier.weight(1f).then(if (lic == Licence.State.TRIAL) Modifier.consumeWindowInsets(WindowInsets.statusBars) else Modifier)) { AppRoot(vm) }
+                    }
+                    if (activationOpen) ActivationDialog(onDismiss = { activationOpen = false }, onActivated = { lic = Licence.State.ACTIVE })
                 } else {
                     PermissionScreen(
                         showSettings = askedOnce,
