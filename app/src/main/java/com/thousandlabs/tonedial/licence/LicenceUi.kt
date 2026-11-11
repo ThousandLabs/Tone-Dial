@@ -54,6 +54,7 @@ fun fmtLeft(ms: Long): String {
 /** Écran affiché tant que Tone Dial n'est ni en essai ni activée. */
 @Composable
 fun LockScreen(state: Licence.State, onTrial: () -> Unit, onActivated: () -> Unit) {
+    val c = LocalContext.current
     var showCode by remember { mutableStateOf(state == Licence.State.EXPIRED) }
     Column(
         Modifier
@@ -95,6 +96,14 @@ fun LockScreen(state: Licence.State, onTrial: () -> Unit, onActivated: () -> Uni
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = TdColors.Accent),
             ) { Text("Essayer gratuitement 48 h", fontWeight = FontWeight.SemiBold) }
+            val availableLeft = remember { Licence.trialAvailableLeft(c) }
+            if (availableLeft < Licence.TRIAL_MS - 30 * 60_000L) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "L'essai compte à partir de l'installation : il reste ${fmtLeft(availableLeft)}.",
+                    color = TdColors.TextDim, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall,
+                )
+            }
             Spacer(Modifier.height(8.dp))
             Text("Puis ${Licence.PRICE}, une seule fois", color = TdColors.TextDim, style = MaterialTheme.typography.bodySmall)
             if (!showCode) TextButton(onClick = { showCode = true }) { Text("J'ai déjà un code") }

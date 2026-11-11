@@ -27,8 +27,9 @@ import java.util.UUID
  * • L'appli ne contient que la clé PUBLIQUE : elle vérifie la signature hors ligne.
  *   Une fois le code accepté, il est gardé : plus besoin de le saisir, jamais.
  *   Après une réinstallation, le même code fonctionne à nouveau sur ce téléphone.
- * • Essai gratuit de 48 h, une fois par téléphone ; heure du téléphone reculée
- *   de plus de 10 minutes pendant l'essai = essai terminé.
+ * • Essai gratuit de 48 h, compté au plus tard à partir de l'installation (date notée
+ *   par Android) : effacer les données de l'appli ne relance pas l'essai.
+ *   Heure du téléphone reculée de plus de 10 minutes = essai terminé.
  */
 object Licence {
 
@@ -124,6 +125,29 @@ object Licence {
 
     fun activatedAt(c: Context): Long = prefs(c).getLong("at", 0L)
 
+    private const val CLOCK_MARGIN_MS = 10L * 60 * 1000
+
+    /**
+     * Date de la première installation, notée par Android lui-même.
+     * Elle ne change pas quand on efface les données de l'appli ni lors d'une mise à jour :
+     * l'essai ne peut donc pas être relancé en effaçant les données.
+     */
+    private fun installedAt(c: Context): Long =
+        runCatching { c.packageManager.getPackageInfo(c.packageName, 0).firstInstallTime }.getOrDefault(0L)
+
+    /** Fin de l'essai : 48 h après le début de l'essai, et au plus tard 48 h après l'installation. */
+    private fun trialEnd(c: Context, start: Long): Long {
+        val inst = installedAt(c)
+        return if (inst > 0L) minOf(start, inst) + TRIAL_MS else start + TRIAL_MS
+    }
+
+    /** L'heure du téléphone a-t-elle été reculée (avant l'installation ou la dernière heure vue) ? */
+    private fun clockMovedBack(c: Context, now: Long): Boolean {
+        val p = prefs(c)
+        val ref = maxOf(installedAt(c), p.getLong("trial", 0L), p.getLong("seen", 0L))
+        return ref > 0L && now < ref - CLOCK_MARGIN_MS
+    }
+
     fun startTrial(c: Context) {
         val p = prefs(c)
         if (p.getLong("trial", 0L) > 0L) return
@@ -137,15 +161,33 @@ object Licence {
         val start = p.getLong("trial", 0L)
         if (start <= 0L) return 0L
         val now = System.currentTimeMillis()
-        val seen = maxOf(p.getLong("seen", start), start)
-        if (now < seen - 10 * 60 * 1000) return 0L
-        if (now > seen) p.edit().putLong("seen", now).apply()
-        return maxOf(0L, start + TRIAL_MS - now)
+        if (clockMovedBack(c, now)) return 0L
+        if (now > p.getLong("seen", 0L)) p.edit().putLong("seen", now).apply()
+        return maxOf(0L, trialEnd(c, start) - now)
+    }
+
+    /**
+     * Essai jamais commencé sur cette installation, mais plus possible :
+     * 48 h déjà écoulées depuis l'installation (par exemple après « Effacer les données »),
+     * ou heure du téléphone reculée.
+     */
+    private fun trialNoLongerAvailable(c: Context): Boolean {
+        val inst = installedAt(c)
+        if (inst <= 0L) return false
+        val now = System.currentTimeMillis()
+        return now >= inst + TRIAL_MS || now < inst - CLOCK_MARGIN_MS
+    }
+
+    /** Temps restant pour profiter de l'essai, s'il n'a pas encore été lancé. */
+    fun trialAvailableLeft(c: Context): Long {
+        val inst = installedAt(c)
+        if (inst <= 0L) return TRIAL_MS
+        return (inst + TRIAL_MS - System.currentTimeMillis()).coerceIn(0L, TRIAL_MS)
     }
 
     fun state(c: Context): State = when {
         isActivated(c) -> State.ACTIVE
-        prefs(c).getLong("trial", 0L) <= 0L -> State.NEW
+        prefs(c).getLong("trial", 0L) <= 0L -> if (trialNoLongerAvailable(c)) State.EXPIRED else State.NEW
         trialLeft(c) > 0L -> State.TRIAL
         else -> State.EXPIRED
     }

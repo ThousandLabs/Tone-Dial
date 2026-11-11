@@ -354,6 +354,7 @@ private val guide = listOf(
         Icons.Outlined.Key, "Essai gratuit et activation",
         listOf(
             "Tone Dial s'essaie gratuitement pendant 48 heures, avec toutes les fonctions. Ensuite, elle coûte 1 000 F, une seule fois, sans abonnement.",
+            "L'essai est compté à partir de l'installation de Tone Dial : lancez-le dès le premier démarrage pour profiter des 48 heures complètes. Effacer les données de l'appli ne relance pas l'essai.",
             "Pour l'acheter : Menu > À propos > « Acheter ou activer ». Payez par Wave (bouton « Payer avec Wave »), par Orange Money au 71 121 65 81 ou en espèces, puis envoyez votre code appareil (TD-XXXX-XXXX) sur WhatsApp.",
             "Vous recevez un code d'activation : collez-le et touchez « Activer ». C'est définitif : plus besoin de le saisir, même après une mise à jour.",
             "Le code est lié à ce téléphone. Si vous réinstallez Tone Dial sur le même téléphone, le même code fonctionne à nouveau : gardez-le dans vos messages.",
