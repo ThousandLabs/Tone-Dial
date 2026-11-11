@@ -6,7 +6,7 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 
 ## Prix et activation
 
-- **Essai gratuit de 48 h**, avec toutes les fonctions.
+- **Essai gratuit de 48 h**, avec toutes les fonctions, compté à partir de l'installation (effacer les données de l'appli ne le relance pas).
 - Ensuite **1 000 F, une seule fois** (sans abonnement) : paiement Wave, Orange Money (71 121 65 81) ou espèces, puis code d'activation envoyé sur WhatsApp.
 - Le code est lié au téléphone et gardé pour toujours : plus besoin de le saisir, même après une mise à jour ou une réinstallation sur le même téléphone.
 - Site officiel : https://thousandlabs.github.io
@@ -39,6 +39,7 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 
 ## Nouveautés
 
+- **1.41** : essai gratuit mieux protégé : il est compté à partir de l'installation, et effacer les données de l'appli ne permet plus de le relancer.
 - **1.34** : minuterie de sommeil avec « Autre durée… » et « Ajouter 10 minutes ».
 - **1.33** : grande mise à jour. Bibliothèque mise à jour toute seule quand on télécharge ou supprime une musique ; titre illisible sauté automatiquement au lieu de bloquer la lecture ; boutons Favori et Aléatoire dans la notification et sur l'écran verrouillé ; reprise de la lecture en branchant des écouteurs ou une enceinte Bluetooth (réglage) ; « Sauter les silences » ; appui long sur Précédent / Suivant pour reculer ou avancer de 10 s ; artiste et album cliquables dans le lecteur ; taille du texte des paroles réglable ; recherche sans accents, à plusieurs mots, avec les recherches récentes ; « Masquer ce titre » et écran « Titres masqués » ; écran « Titres en double » ; « Annuler » après avoir retiré un titre de la file ; temps d'écoute des statistiques corrigé en vitesse modifiée.
 - **1.31** : déplacement des titres plus rapide dans la file d'attente et les playlists : la liste défile toute seule quand on tient un titre près d'un bord (de plus en plus vite), le titre reste sous le doigt, et « Déplacer à la position… » (avec « En premier » et « En dernier ») pour l'envoyer directement à une place précise.
