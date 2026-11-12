@@ -39,6 +39,7 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 
 ## Nouveautés
 
+- **1.43** : la file d'attente suit la lecture : quand le titre suivant arrive en bas de l'écran, la liste descend d'un cran toute seule. Elle ne remonte jamais d'elle-même et ne bouge pas pendant qu'on fait défiler ou qu'on déplace un titre.
 - **1.42** : essai gratuit mieux protégé : il est compté à partir de l'installation, et effacer les données de l'appli ne permet plus de le relancer.
 - **1.34** : minuterie de sommeil avec « Autre durée… » et « Ajouter 10 minutes ».
 - **1.33** : grande mise à jour. Bibliothèque mise à jour toute seule quand on télécharge ou supprime une musique ; titre illisible sauté automatiquement au lieu de bloquer la lecture ; boutons Favori et Aléatoire dans la notification et sur l'écran verrouillé ; reprise de la lecture en branchant des écouteurs ou une enceinte Bluetooth (réglage) ; « Sauter les silences » ; appui long sur Précédent / Suivant pour reculer ou avancer de 10 s ; artiste et album cliquables dans le lecteur ; taille du texte des paroles réglable ; recherche sans accents, à plusieurs mots, avec les recherches récentes ; « Masquer ce titre » et écran « Titres masqués » ; écran « Titres en double » ; « Annuler » après avoir retiré un titre de la file ; temps d'écoute des statistiques corrigé en vitesse modifiée.

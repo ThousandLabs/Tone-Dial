@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -120,6 +121,36 @@ fun QueueScreen(vm: MainViewModel, nav: Nav) {
             }
         }
 
+        // suivi automatique : quand la lecture passe au titre suivant et qu'il sort par le bas de l'écran,
+        // la liste descend juste assez pour le garder visible. Elle ne remonte jamais toute seule
+        // (si l'on a défilé plus bas, on reste où l'on est) et ne bouge pas pendant qu'on fait défiler.
+        var followedPos by remember { mutableIntStateOf(curPos) }
+        var holding by remember { mutableStateOf(false) }
+        LaunchedEffect(curPos) {
+            val previous = followedPos
+            followedPos = curPos
+            if (curPos < 0 || previous < 0 || curPos == previous) return@LaunchedEffect
+            if (holding || listState.isScrollInProgress) return@LaunchedEffect
+            val info = listState.layoutInfo
+            val visible = info.visibleItemsInfo
+            if (visible.isEmpty()) return@LaunchedEffect
+            val idx = curPos + 1 // +1 : l'en-tête
+            val bottom = info.viewportEndOffset - info.afterContentPadding
+            val item = visible.firstOrNull { it.index == idx }
+            when {
+                // déjà entièrement visible, ou au-dessus de l'écran : on ne touche à rien
+                item != null && item.offset + item.size <= bottom -> Unit
+                idx < visible.first().index -> Unit
+                // visible en partie en bas : on descend juste de ce qu'il faut
+                item != null -> listState.animateScrollBy((item.offset + item.size - bottom).toFloat())
+                // plus bas que l'écran : on l'amène en bas de la liste visible
+                else -> {
+                    val fully = visible.count { it.offset >= 0 && it.offset + it.size <= bottom }.coerceAtLeast(1)
+                    listState.animateScrollToItem((idx - fully + 1).coerceAtLeast(0))
+                }
+            }
+        }
+
         Box(Modifier.fillMaxSize()) {
             ReorderableList(
                 items = entries,
@@ -128,6 +159,7 @@ fun QueueScreen(vm: MainViewModel, nav: Nav) {
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 88.dp),
                 headerCount = 1,
+                onDraggingChange = { holding = it },
                 onMoved = { from, to -> vm.moveInQueue(from, to) },
                 header = {
                     item(key = "header") {

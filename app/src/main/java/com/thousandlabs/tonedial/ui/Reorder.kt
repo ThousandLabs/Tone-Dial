@@ -44,6 +44,7 @@ fun <T> ReorderableList(
     headerCount: Int = 0,
     header: (androidx.compose.foundation.lazy.LazyListScope.() -> Unit)? = null,
     contentPadding: PaddingValues = PaddingValues(0.dp),
+    onDraggingChange: (Boolean) -> Unit = {},
     row: @Composable (item: T, index: Int, dragging: Boolean, handle: Modifier) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -116,6 +117,7 @@ fun <T> ReorderableList(
         val start = startIndex
         draggingKey = null
         startIndex = -1
+        onDraggingChange(false)
         if (start >= 0 && end >= 0 && start != end) onMoved(start, end)
     }
 
@@ -134,6 +136,7 @@ fun <T> ReorderableList(
                             dragSize = info.size
                             draggingKey = k
                             startIndex = items.indexOfFirst { key(it) == k }
+                            onDraggingChange(true)
                         }
                     },
                     onDragEnd = { finish() },
