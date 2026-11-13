@@ -1024,7 +1024,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         saveLyrics(song, text)
     }
 
-    fun saveLyrics(song: Song, text: String, message: String? = null) {
+    fun saveLyrics(song: Song, text: String, message: String? = null, autoTime: Boolean = true) {
         UserStore.setCustomLyrics(song.id, text)
         if (text.isNotBlank() && lyricsFor == song.id) {
             // mise à jour immédiate, sans recharger (évite un clignotement pendant les réglages)
@@ -1033,7 +1033,53 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             lyricsFor = null
             refreshPlayer()
         }
+        // paroles sans heures (copiées depuis un site) : on cherche tout de suite leur minutage
+        if (autoTime && text.isNotBlank() && !com.thousandlabs.tonedial.data.LyricsAlign.hasTiming(text)) {
+            _messages.tryEmit("Paroles enregistrées, recherche du minutage…")
+            autoTimeLyrics(song, text)
+            return
+        }
         _messages.tryEmit(message ?: if (text.isBlank()) "Paroles supprimées" else "Paroles enregistrées")
+    }
+
+    private val _lyricsTiming = MutableStateFlow(false)
+    /** Minutage automatique en cours. */
+    val lyricsTiming: StateFlow<Boolean> = _lyricsTiming.asStateFlow()
+
+    /**
+     * Ajoute les heures à des paroles simples : la version synchronisée trouvée sur LRCLIB
+     * sert de modèle, et ses heures sont placées sur le texte de l'utilisateur.
+     */
+    fun autoTimeLyrics(song: Song, plain: String) {
+        if (_lyricsTiming.value) return
+        val before = UserStore.customLyrics(song.id)
+        viewModelScope.launch {
+            _lyricsTiming.value = true
+            val reference = com.thousandlabs.tonedial.data.LyricsOnline.find(song)
+                ?.let { LyricsLoader.parse(it, "LRCLIB") }
+                ?.takeIf { it.synced }
+            val result = reference?.let {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    com.thousandlabs.tonedial.data.LyricsAlign.transfer(plain, it)
+                }
+            }
+            _lyricsTiming.value = false
+            // l'utilisateur a changé les paroles entre-temps : on ne touche à rien
+            if (UserStore.customLyrics(song.id) != before) return@launch
+            if (result == null) {
+                _messages.tryEmit(
+                    if (reference == null) "Aucun minutage trouvé en ligne (ou pas de connexion) : utilisez « Synchroniser à la main »"
+                    else "Le minutage trouvé ne correspond pas à ce texte : utilisez « Synchroniser à la main »"
+                )
+                return@launch
+            }
+            saveLyrics(
+                song, result.lrc,
+                if (result.approximate) "Minutage ajouté, approximatif par endroits : ajustez si besoin"
+                else "Paroles minutées automatiquement",
+                autoTime = false,
+            )
+        }
     }
 
     // ---------------- Sonnerie et partage ----------------

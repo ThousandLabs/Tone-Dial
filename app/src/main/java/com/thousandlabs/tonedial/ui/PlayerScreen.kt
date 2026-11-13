@@ -133,7 +133,7 @@ fun PlayerScreen(vm: MainViewModel, nav: Nav, song: Song, ui: PlayerUi, onClose:
                 contentAlignment = Alignment.Center,
             ) {
                 if (showLyrics) {
-                    LyricsPanel(vm, song, ui.positionMs, ui.isPlaying)
+                    LyricsPanel(vm, song, ui.positionMs, ui.isPlaying, ui.durationMs)
                 } else {
                     ArtworkFill(
                         song.art(),
@@ -303,7 +303,7 @@ private fun SeekBar(ui: PlayerUi, vm: MainViewModel) {
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long, isPlaying: Boolean = false) {
+private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long, isPlaying: Boolean = false, durationMs: Long = 0L) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val lyricsScale = LyricsScale.value
     val lyrics by vm.lyrics.collectAsStateWithLifecycle()
@@ -314,6 +314,8 @@ private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long, isPlayi
     var options by remember { mutableStateOf(false) }
     var lineMenu by remember { mutableStateOf<Int?>(null) }
     var timingDialog by remember { mutableStateOf(false) }
+    var syncing by remember(song.id) { mutableStateOf(false) }
+    val autoTiming by vm.lyricsTiming.collectAsStateWithLifecycle()
     // texte .lrc modifiable : paroles enregistrées dans l'appli, sinon reconstruites avec leurs minutages
     val editBase = com.thousandlabs.tonedial.data.UserStore.customLyrics(song.id)
         ?: lyrics?.let { com.thousandlabs.tonedial.data.LyricsTiming.toLrc(it) }.orEmpty()
@@ -350,6 +352,18 @@ private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long, isPlayi
             .background(TdColors.Surface)
     ) {
         when {
+            syncing && l != null && l.lines.any { it.text.isNotBlank() } -> SyncPanel(
+                vm = vm,
+                lines = l.lines.map { it.text.trim() }.filter { it.isNotEmpty() },
+                positionMs = positionMs,
+                isPlaying = isPlaying,
+                durationMs = durationMs,
+                onDone = { lrc ->
+                    vm.saveLyrics(song, lrc, "Paroles synchronisées", autoTime = false)
+                    syncing = false
+                },
+                onCancel = { syncing = false },
+            )
             (loading || searching) && (l == null || l.lines.isEmpty()) -> Column(
                 Modifier.align(Alignment.Center).padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -496,6 +510,15 @@ private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long, isPlayi
                     contentPadding = PaddingValues(vertical = 24.dp, horizontal = 20.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
+                    if (!l.synced) {
+                        item {
+                            UntimedBanner(
+                                timing = autoTiming,
+                                onAuto = { vm.autoTimeLyrics(song, l.plainText) },
+                                onManual = { syncing = true },
+                            )
+                        }
+                    }
                     itemsIndexed(l.lines) { i, line ->
                         val active = i == activeIndex
                         if (active && karaoke && l.synced && line.timeMs != null && line.text.isNotBlank()) {
@@ -551,6 +574,19 @@ private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long, isPlayi
                                         },
                                     )
                                 }
+                                if (!l.synced) {
+                                    DropdownMenuItem(
+                                        text = { Text("Minuter automatiquement") },
+                                        leadingIcon = { Icon(Icons.Outlined.AutoFixHigh, null) },
+                                        enabled = !autoTiming,
+                                        onClick = { options = false; vm.autoTimeLyrics(song, l.plainText) },
+                                    )
+                                }
+                                DropdownMenuItem(
+                                    text = { Text("Synchroniser à la main") },
+                                    leadingIcon = { Icon(Icons.Outlined.TouchApp, null) },
+                                    onClick = { options = false; syncing = true },
+                                )
                                 DropdownMenuItem(
                                     text = { Text("Agrandir le texte") },
                                     leadingIcon = { Icon(Icons.Outlined.TextIncrease, null) },
@@ -789,6 +825,154 @@ private fun KaraokeLine(
         fontWeight = FontWeight.Bold,
         modifier = modifier,
     )
+}
+
+/** Paroles sans heures : elles ne peuvent pas suivre la musique tant qu'on ne les a pas minutées. */
+@Composable
+private fun UntimedBanner(timing: Boolean, onAuto: () -> Unit, onManual: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(bottom = 16.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(TdColors.SurfaceHigh)
+            .padding(14.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.Timer, null, tint = TdColors.Accent, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Paroles sans minutage", style = MaterialTheme.typography.titleSmall)
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Elles ne défilent pas avec la musique et le karaoké est désactivé. Ajoutez les heures automatiquement (connexion nécessaire) ou à la main pendant l'écoute.",
+            style = MaterialTheme.typography.bodySmall,
+            color = TdColors.TextDim,
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Button(
+                onClick = onAuto,
+                enabled = !timing,
+                colors = ButtonDefaults.buttonColors(containerColor = TdColors.Accent),
+                contentPadding = PaddingValues(horizontal = 12.dp),
+            ) {
+                if (timing) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = TdColors.Text)
+                else Icon(Icons.Outlined.AutoFixHigh, null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(if (timing) "Recherche…" else "Automatique")
+            }
+            OutlinedButton(onClick = onManual, contentPadding = PaddingValues(horizontal = 12.dp)) {
+                Icon(Icons.Outlined.TouchApp, null, modifier = Modifier.size(16.dp), tint = TdColors.Text)
+                Spacer(Modifier.width(6.dp))
+                Text("À la main", color = TdColors.Text)
+            }
+        }
+    }
+}
+
+/**
+ * Synchronisation à la main : pendant l'écoute, un appui sur « Ligne suivante »
+ * au moment où l'artiste commence chaque ligne enregistre son heure.
+ */
+@Composable
+private fun SyncPanel(
+    vm: MainViewModel,
+    lines: List<String>,
+    positionMs: Long,
+    isPlaying: Boolean,
+    durationMs: Long,
+    onDone: (String) -> Unit,
+    onCancel: () -> Unit,
+) {
+    val speed by vm.speed.collectAsStateWithLifecycle()
+    val position = rememberSmoothPosition(positionMs, isPlaying, speed)
+    val stamps = remember(lines) { mutableStateListOf<Long>() }
+    val state = rememberLazyListState()
+    val current = stamps.size
+    val finished = current >= lines.size
+
+    LaunchedEffect(current) {
+        runCatching { state.animateScrollToItem((current - 2).coerceAtLeast(0)) }
+    }
+    LaunchedEffect(finished) {
+        if (finished) onDone(com.thousandlabs.tonedial.data.LyricsAlign.fromStamps(lines, stamps.toList(), durationMs))
+    }
+
+    Column(Modifier.fillMaxSize().padding(16.dp)) {
+        Text("Synchroniser les paroles", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(2.dp))
+        Text(
+            if (isPlaying) "Appuyez sur « Ligne suivante » au moment où l'artiste commence la ligne en surbrillance."
+            else "Lancez la lecture depuis le début, puis appuyez sur « Ligne suivante » au début de chaque ligne.",
+            style = MaterialTheme.typography.bodySmall,
+            color = TdColors.TextDim,
+        )
+        Spacer(Modifier.height(8.dp))
+        LazyColumn(state = state, modifier = Modifier.weight(1f).fillMaxWidth()) {
+            itemsIndexed(lines) { i, text ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        stamps.getOrNull(i)?.let { formatDuration(it) } ?: "",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TdColors.TextDim,
+                        modifier = Modifier.width(44.dp),
+                    )
+                    Text(
+                        text,
+                        style = MaterialTheme.typography.bodyLarge.copy(fontSize = (17 * LyricsScale.value).sp),
+                        fontWeight = if (i == current) FontWeight.Bold else FontWeight.Normal,
+                        color = when {
+                            i == current -> TdColors.Accent
+                            i < current -> TdColors.TextDim
+                            else -> TdColors.Text
+                        },
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Button(
+            onClick = {
+                // petit retard de réaction du doigt compensé
+                if (!finished) stamps.add((position.value - 150).coerceAtLeast(0L))
+            },
+            enabled = !finished,
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = TdColors.Accent),
+        ) {
+            Icon(Icons.Outlined.TouchApp, null, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Ligne suivante  (${(current + 1).coerceAtMost(lines.size)} / ${lines.size})")
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            TextButton(onClick = onCancel, contentPadding = PaddingValues(horizontal = 6.dp)) {
+                Text("Quitter")
+            }
+            TextButton(
+                enabled = stamps.isNotEmpty(),
+                contentPadding = PaddingValues(horizontal = 6.dp),
+                onClick = {
+                    // on revient un peu avant la ligne annulée pour la refaire
+                    val t = stamps.removeAt(stamps.lastIndex)
+                    vm.seekTo((t - 3000).coerceAtLeast(0L))
+                },
+            ) {
+                Text("Annuler")
+            }
+            TextButton(onClick = { stamps.clear(); vm.seekTo(0L) }, contentPadding = PaddingValues(horizontal = 6.dp)) {
+                Text("Recommencer")
+            }
+            TextButton(
+                enabled = stamps.isNotEmpty(),
+                contentPadding = PaddingValues(horizontal = 6.dp),
+                onClick = { onDone(com.thousandlabs.tonedial.data.LyricsAlign.fromStamps(lines, stamps.toList(), durationMs)) },
+            ) {
+                Text("Terminer")
+            }
+        }
+    }
 }
 
 /** Taille du texte des paroles, réglable depuis « Options » (de 80 % à 160 %). */
