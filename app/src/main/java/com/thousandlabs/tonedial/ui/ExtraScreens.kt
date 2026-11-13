@@ -185,6 +185,7 @@ private val guide = listOf(
             "Menu > Réglages > Identifier les artistes propose trois modes. « Regrouper, titres intacts » garde vos noms exactement comme vous les avez écrits (« Eminem - Rap God ») tout en remplissant l'onglet Artistes. « Séparer artiste et titre » affiche « Rap God » avec l'artiste « Eminem ». « Désactivé » n'utilise que les informations des fichiers.",
             "Même sans tiret, l'appli comprend qu'un groupe de mots est un artiste quand plusieurs titres commencent par lui (« Eminem Lose Yourself », « Eminem Mockingbird »…) ou quand c'est un artiste déjà connu ailleurs dans votre bibliothèque.",
             "Les openings et endings sont rangés par anime : « One Piece Opening 25 - The Peak » apparaît chez « One Piece » dans l'onglet Artistes.",
+            "Onglet « Animes » sur l'accueil : chaque anime avec son affiche et ses openings puis ses endings, dans l'ordre des numéros. Il suffit que le titre ou le nom du fichier ressemble à « One Piece Opening 25 » ou « Black Clover Ending 3 ». L'onglet se masque dans Menu > Réglages > « Onglet Animes », et se déplace avec « Ordre des onglets ».",
             "Vos fichiers ne sont jamais modifiés.",
         ),
     ),
@@ -200,6 +201,9 @@ private val guide = listOf(
             "Dans le lecteur, appuyez sur le nom de l'artiste pour ouvrir sa page, ou sur le nom de l'album (en haut) pour ouvrir l'album.",
             "La notification et l'écran verrouillé ont aussi un bouton Favori (cœur) et un bouton Aléatoire. Ils se retirent dans Menu > Réglages.",
             "Si un fichier est introuvable ou abîmé, Tone Dial passe tout seul au titre suivant et l'indique par un message, au lieu de rester bloqué.",
+            "Fondu enchaîné : Menu > Réglages > « Fondu enchaîné ». Pendant les dernières secondes d'un titre, le suivant démarre doucement pendant que le premier baisse, comme à la radio. Durée réglable de 2 à 10 secondes. Les pistes qui se suivent dans un même album s'enchaînent sans fondu, et la minuterie « fin du morceau » laisse le titre se terminer seul.",
+            "Secouer pour passer : Menu > Réglages > « Secouer pour passer » (désactivé au départ). Pendant la lecture, deux secousses franches et rapprochées passent au titre suivant, ou mettent en pause selon le réglage « Action ». Ça marche aussi écran éteint, téléphone dans la poche. Aucune autorisation n'est demandée : l'appli utilise l'accéléromètre, et la petite vibration de confirmation peut être coupée. Sensibilité : « Faible » demande de secouer fort, « Forte » réagit à une secousse légère.",
+            "Si la secousse ne marche plus écran éteint (fréquent sur les téléphones Tecno, Infinix et itel) : Paramètres du téléphone > Applications > Tone Dial > Batterie, puis « Sans restriction ».",
             "Menu > Réglages > « Sauter les silences » passe les blancs au début, à la fin et au milieu des titres.",
             "La notification, l'écran verrouillé et le centre de contrôle affichent la pochette du titre en grand (celle de l'album ou celle intégrée au fichier), ou le logo Tone Dial si le titre n'en a pas.",
             "Au prochain lancement, Tone Dial reprend là où vous vous étiez arrêté.",
@@ -296,8 +300,18 @@ private val guide = listOf(
             "Les paroles synchronisées (minutages comme [01:23.45]) défilent en rythme avec la musique, et un appui sur une ligne y fait sauter la lecture.",
             "La ligne chantée se remplit lettre par lettre, façon karaoké. Si le fichier .lrc indique l'heure de chaque mot (format enrichi), le remplissage suit exactement l'artiste ; sinon il est estimé à partir du rythme de la ligne et peut avoir un léger décalage. Pour revenir au surlignage par ligne entière : Options, sous les paroles.",
             "Sous les paroles, « Options » permet d'en chercher d'autres, de les modifier ou de les supprimer.",
+            "Traduction : sous les paroles, « Traduire en français » affiche la traduction en petit sous chaque ligne (connexion nécessaire la première fois, Google Traduction). Elle est ensuite gardée sur le téléphone. « Options » > « Masquer la traduction » la cache sans l'effacer. La fonction se désactive dans Menu > Réglages > « Traduction des paroles ».",
             "Si les paroles sont décalées : pendant la lecture, restez appuyé sur une ligne au moment où l'artiste commence à la chanter, puis « Cette ligne commence maintenant ». Elle et toutes les suivantes se recalent. Pratique après une longue intro sans paroles.",
             "« Décaler toutes les paroles » (même menu) avance ou retarde l'ensemble par pas de 0,5 s. Et dans « Modifier », si vous changez l'heure d'une ligne sans toucher aux suivantes, elles sont décalées du même écart automatiquement.",
+        ),
+    ),
+    GuideSection(
+        Icons.Outlined.AutoAwesome, "Mix et bilan du mois",
+        listOf(
+            "Dans l'onglet Playlists, la rubrique « Mix » se remplit toute seule à partir de vos écoutes : « Vos titres du moment » (les plus écoutés des deux dernières semaines), « Oubliés depuis longtemps » (souvent écoutés, plus du tout depuis un mois) et « À découvrir » (titres jamais écoutés, nouvelle sélection chaque jour).",
+            "« Bilan du mois » (onglet Playlists, ou Menu > Réglages > Statistiques) : temps d'écoute, jours d'écoute, plus longue série de jours, titre, artiste et opening du mois, et votre top 5. Vous pouvez voir le mois en cours et les deux précédents.",
+            "« Partager en image » crée une image du bilan, l'enregistre dans la galerie (dossier Tone Dial) et ouvre le partage : WhatsApp, statut…",
+            "Les mix et le bilan se masquent dans Menu > Réglages, rubrique « Fonctions ».",
         ),
     ),
     GuideSection(
@@ -470,7 +484,7 @@ fun AboutScreen(nav: Nav) {
                 ListItemRow(Icons.Outlined.Language, "Site Thousand Labs", subtitle = SITE_URL.removePrefix("https://"), onClick = { open(SITE_URL) })
                 SectionLabel("Confidentialité")
                 Text(
-                    "Vos musiques, playlists, favoris et statistiques d'écoute restent uniquement sur votre téléphone. Tone Dial ne contient aucune publicité. La connexion Internet sert uniquement à vérifier les mises à jour sur GitHub (désactivable ci-dessus) à chercher les paroles (LRCLIB) et les pochettes (Deezer, iTunes, MyAnimeList, AnimeThemes) : seuls le titre et l'artiste du morceau sont envoyés.",
+                    "Vos musiques, playlists, favoris et statistiques d'écoute restent uniquement sur votre téléphone. Tone Dial ne contient aucune publicité. La connexion Internet sert uniquement à vérifier les mises à jour sur GitHub (désactivable ci-dessus) à chercher les paroles (LRCLIB) et les pochettes (Deezer, iTunes, MyAnimeList, AnimeThemes) : seuls le titre et l'artiste du morceau sont envoyés. Quand vous demandez une traduction, seul le texte des paroles est envoyé à Google Traduction.",
                     modifier = Modifier.padding(horizontal = 20.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = TdColors.TextDim,

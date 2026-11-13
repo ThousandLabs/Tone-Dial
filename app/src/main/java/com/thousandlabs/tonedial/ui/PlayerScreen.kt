@@ -316,6 +316,10 @@ private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long, isPlayi
     var timingDialog by remember { mutableStateOf(false) }
     var syncing by remember(song.id) { mutableStateOf(false) }
     val autoTiming by vm.lyricsTiming.collectAsStateWithLifecycle()
+    val translateOn by com.thousandlabs.tonedial.data.Features.translate.state.collectAsStateWithLifecycle()
+    val translating by vm.translating.collectAsStateWithLifecycle()
+    val trVersion by vm.translationVersion.collectAsStateWithLifecycle()
+    var showTr by remember { mutableStateOf(com.thousandlabs.tonedial.data.LyricsTranslate.showEnabled()) }
     // texte .lrc modifiable : paroles enregistrées dans l'appli, sinon reconstruites avec leurs minutages
     val editBase = com.thousandlabs.tonedial.data.UserStore.customLyrics(song.id)
         ?: lyrics?.let { com.thousandlabs.tonedial.data.LyricsTiming.toLrc(it) }.orEmpty()
@@ -338,6 +342,12 @@ private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long, isPlayi
     }
 
     val l = lyrics
+    // traduction déjà enregistrée pour ces paroles (une ligne traduite par ligne de paroles)
+    val translation: List<String>? = remember(song.id, l, trVersion, translateOn) {
+        if (!translateOn || l == null || l.lines.isEmpty()) null
+        else com.thousandlabs.tonedial.data.LyricsTranslate.cached(song.id, l.lines.map { it.text })
+    }
+    val shownTranslation = translation?.takeIf { showTr }
     // Recherche automatique en ligne, une seule fois par titre, quand rien n'est trouvé sur le téléphone
     LaunchedEffect(song.id, loading, l == null) {
         if (!loading && l == null) vm.searchLyricsOnline(song, auto = true)
@@ -531,6 +541,7 @@ private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long, isPlayi
                                     .padding(vertical = 6.dp)
                                     .combinedClickable(onClick = { vm.seekTo(line.timeMs) }, onLongClick = { lineMenu = i }),
                             )
+                            TranslationLine(shownTranslation?.getOrNull(i), lyricsScale)
                             return@itemsIndexed
                         }
                         Text(
@@ -552,9 +563,28 @@ private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long, isPlayi
                                     onLongClick = { lineMenu = i },
                                 ),
                         )
+                        TranslationLine(shownTranslation?.getOrNull(i), lyricsScale)
                     }
                     item {
                         Spacer(Modifier.height(16.dp))
+                        if (translateOn && translation == null) {
+                            Row(
+                                Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable(enabled = !translating) { vm.translateLyrics(song, l.lines.map { it.text }); showTr = true }
+                                    .padding(vertical = 6.dp, horizontal = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                if (translating) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = TdColors.Accent)
+                                else Icon(Icons.Outlined.Translate, null, tint = TdColors.Accent, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    if (translating) "Traduction en cours…" else "Traduire en français",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TdColors.Accent,
+                                )
+                            }
+                        }
                         Box {
                             Text(
                                 "Source : ${l.source}  ·  Options",
@@ -573,6 +603,26 @@ private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long, isPlayi
                                             com.thousandlabs.tonedial.data.UserStore.putBool("lyrics_karaoke", karaoke)
                                         },
                                     )
+                                }
+                                if (translateOn) {
+                                    if (translation == null) {
+                                        DropdownMenuItem(
+                                            text = { Text("Traduire en français") },
+                                            leadingIcon = { Icon(Icons.Outlined.Translate, null) },
+                                            enabled = !translating,
+                                            onClick = { options = false; showTr = true; vm.translateLyrics(song, l.lines.map { it.text }) },
+                                        )
+                                    } else {
+                                        DropdownMenuItem(
+                                            text = { Text(if (showTr) "Masquer la traduction" else "Afficher la traduction") },
+                                            leadingIcon = { Icon(Icons.Outlined.Translate, null) },
+                                            onClick = {
+                                                options = false
+                                                showTr = !showTr
+                                                com.thousandlabs.tonedial.data.LyricsTranslate.setShow(showTr)
+                                            },
+                                        )
+                                    }
                                 }
                                 if (!l.synced) {
                                     DropdownMenuItem(
@@ -824,6 +874,19 @@ private fun KaraokeLine(
         style = MaterialTheme.typography.titleMedium.copy(fontSize = (21 * LyricsScale.value).sp, lineHeight = (30 * LyricsScale.value).sp),
         fontWeight = FontWeight.Bold,
         modifier = modifier,
+    )
+}
+
+/** Traduction française affichée sous une ligne de paroles. */
+@Composable
+private fun TranslationLine(text: String?, scale: Float) {
+    if (text.isNullOrBlank()) return
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall.copy(fontSize = (13 * scale).sp, lineHeight = (18 * scale).sp),
+        color = TdColors.TextDim,
+        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
     )
 }
 

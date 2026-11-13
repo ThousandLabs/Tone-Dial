@@ -162,4 +162,47 @@ object ListenStats {
         }
         return Summary(total, plays, time, selected.count { it.value.ms > 0 }, byDay)
     }
+
+    data class Month(
+        val label: String,
+        val totalMs: Long,
+        val plays: Map<Long, Int>,
+        val timeBySong: Map<Long, Long>,
+        val activeDays: Int,
+        val bestStreak: Int,
+        val bestDay: Pair<String, Long>?,
+    )
+
+    private val monthNames = listOf("janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre")
+
+    /** Bilan d'un mois : 0 = mois en cours, 1 = mois dernier, 2 = il y a deux mois. */
+    @Synchronized
+    fun month(monthsAgo: Int): Month {
+        val map = ensure()
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_MONTH, 1)
+            add(Calendar.MONTH, -monthsAgo)
+        }
+        val label = monthNames[cal.get(Calendar.MONTH)] + " " + cal.get(Calendar.YEAR)
+        val prefix = SimpleDateFormat("yyyy-MM", Locale.US).format(cal.time)
+        val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+        val selected = map.filterKeys { it.startsWith(prefix) }
+        val plays = HashMap<Long, Int>()
+        val time = HashMap<Long, Long>()
+        var total = 0L
+        selected.values.forEach { d ->
+            total += d.ms
+            d.plays.forEach { (id, n) -> plays[id] = (plays[id] ?: 0) + n }
+            d.songMs.forEach { (id, ms) -> time[id] = (time[id] ?: 0L) + ms }
+        }
+        // plus longue série de jours d'écoute consécutifs dans le mois
+        var best = 0
+        var run = 0
+        for (day in 1..daysInMonth) {
+            val key = prefix + "-" + "%02d".format(Locale.US, day)
+            if ((map[key]?.ms ?: 0L) > 0L) { run++; if (run > best) best = run } else run = 0
+        }
+        val bestDay = selected.entries.maxByOrNull { it.value.ms }?.takeIf { it.value.ms > 0 }?.let { it.key to it.value.ms }
+        return Month(label, total, plays, time, selected.count { it.value.ms > 0 }, best, bestDay)
+    }
 }

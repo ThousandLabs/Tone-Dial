@@ -65,6 +65,9 @@ enum class AutoList(val label: String) {
     MOST_PLAYED("Les plus écoutés"),
     RECENTLY_PLAYED("Écoutés récemment"),
     RECENTLY_ADDED("Ajoutés récemment"),
+    MIX_NOW("Vos titres du moment"),
+    MIX_FORGOTTEN("Oubliés depuis longtemps"),
+    MIX_DISCOVER("À découvrir"),
 }
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -581,6 +584,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             AutoList.RECENTLY_PLAYED -> UserStore.lastPlayed.value.entries
                 .sortedByDescending { it.value }.mapNotNull { map[it.key] }.take(100)
             AutoList.RECENTLY_ADDED -> _songs.value.sortedByDescending { it.dateAdded }.take(100)
+            // les plus écoutés des 14 derniers jours (au moins une minute d'écoute)
+            AutoList.MIX_NOW -> com.thousandlabs.tonedial.data.ListenStats.summary(14).timeBySong.entries
+                .filter { it.value >= 60_000 }.sortedByDescending { it.value }.mapNotNull { map[it.key] }.take(50)
+            // souvent écoutés autrefois, plus du tout depuis un mois
+            AutoList.MIX_FORGOTTEN -> {
+                val limit = System.currentTimeMillis() - 30L * 86_400_000L
+                val last = UserStore.lastPlayed.value
+                UserStore.playCounts.value.entries
+                    .filter { it.value >= 3 && (last[it.key] ?: 0L) < limit }
+                    .sortedByDescending { it.value }.mapNotNull { map[it.key] }.take(50)
+            }
+            // jamais écoutés : une sélection différente chaque jour
+            AutoList.MIX_DISCOVER -> {
+                val counts = UserStore.playCounts.value
+                val day = System.currentTimeMillis() / 86_400_000L
+                _songs.value.filter { (counts[it.id] ?: 0) == 0 }.shuffled(kotlin.random.Random(day)).take(50)
+            }
         }
     }
 
@@ -708,6 +728,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     .setTitle(title)
                     .setArtist(artist)
                     .setAlbumTitle(album)
+                    .setTrackNumber(if (track > 0) track % 1000 else null)
                     .setArtworkUri(com.thousandlabs.tonedial.playback.ArtBitmapLoader.artUri(id, albumId, artists.firstOrNull()?.takeUnless { it == "Artiste inconnu" }))
                     .setIsPlayable(true)
                     .setIsBrowsable(false)
@@ -1042,6 +1063,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _messages.tryEmit(message ?: if (text.isBlank()) "Paroles supprimées" else "Paroles enregistrées")
     }
 
+    // ---------------- Traduction des paroles ----------------
+    private val _translating = MutableStateFlow(false)
+    val translating: StateFlow<Boolean> = _translating.asStateFlow()
+    private val _translationVersion = MutableStateFlow(0)
+    /** Change à chaque nouvelle traduction enregistrée (l'écran des paroles se met à jour). */
+    val translationVersion: StateFlow<Int> = _translationVersion.asStateFlow()
+
+    fun translateLyrics(song: Song, lines: List<String>) {
+        if (_translating.value) return
+        viewModelScope.launch {
+            _translating.value = true
+            val r = com.thousandlabs.tonedial.data.LyricsTranslate.translate(song.id, lines)
+            _translating.value = false
+            when (r) {
+                is com.thousandlabs.tonedial.data.LyricsTranslate.Outcome.Done -> {
+                    com.thousandlabs.tonedial.data.LyricsTranslate.setShow(true)
+                    _translationVersion.value++
+                }
+                com.thousandlabs.tonedial.data.LyricsTranslate.Outcome.AlreadyFrench -> _messages.tryEmit("Ces paroles sont déjà en français")
+                com.thousandlabs.tonedial.data.LyricsTranslate.Outcome.Failed -> _messages.tryEmit("Traduction impossible pour le moment (pas de connexion ?)")
+            }
+        }
+    }
+
     private val _lyricsTiming = MutableStateFlow(false)
     /** Minutage automatique en cours. */
     val lyricsTiming: StateFlow<Boolean> = _lyricsTiming.asStateFlow()
@@ -1107,6 +1152,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         return Intent.createChooser(send, "Partager « ${song.title} »").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+
+    /** Image du bilan du mois : enregistrée dans la galerie puis proposée au partage. */
+    fun shareRecap(card: com.thousandlabs.tonedial.data.RecapImage.Card) {
+        viewModelScope.launch {
+            val intent = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.thousandlabs.tonedial.data.RecapImage.saveAndShare(ctx, card)
+            }
+            if (intent == null) {
+                _messages.tryEmit("Impossible de créer l'image du bilan")
+                return@launch
+            }
+            _messages.tryEmit("Image enregistrée dans la galerie (Tone Dial)")
+            runCatching { ctx.startActivity(intent) }
+        }
     }
 
     fun notify(msg: String) {

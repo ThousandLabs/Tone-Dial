@@ -59,6 +59,8 @@ class PlaybackService : MediaSessionService() {
     private val handler = Handler(Looper.getMainLooper())
 
     private var lastTick = 0L
+    private var crossfade: Crossfade? = null
+    private var shake: ShakeControl? = null
 
     /** Toutes les 10 secondes : position de reprise et temps d'écoute pour les statistiques. */
     private val saveLoop = object : Runnable {
@@ -96,6 +98,8 @@ class PlaybackService : MediaSessionService() {
 
         AudioFx.attach(player.audioSessionId)
         player.skipSilenceEnabled = skipSilence()
+        crossfade = Crossfade(this, player, handler)
+        shake = ShakeControl(this, player, handler)
 
         player.addListener(object : Player.Listener {
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
@@ -105,6 +109,7 @@ class PlaybackService : MediaSessionService() {
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 // fichier supprimé, déplacé ou abîmé : on passe au suivant au lieu de rester bloqué
                 errorsInARow++
+                crossfade?.onError()
                 val title = player.currentMediaItem?.mediaMetadata?.title?.toString().orEmpty()
                 if (errorsInARow <= player.mediaItemCount.coerceAtMost(20) && player.hasNextMediaItem()) {
                     events.tryEmit(if (title.isNotBlank()) "« $title » est illisible : titre suivant" else "Titre illisible : titre suivant")
@@ -122,6 +127,7 @@ class PlaybackService : MediaSessionService() {
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                crossfade?.onTransition(reason)
                 updateButtons()
                 val id = mediaItem?.mediaId?.toLongOrNull()
                 if (id != null && (player.playWhenReady || reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO)) {
@@ -143,14 +149,20 @@ class PlaybackService : MediaSessionService() {
                     com.thousandlabs.tonedial.data.ListenStats.save()
                 }
                 lastTick = if (isPlaying) now else 0L
+                crossfade?.onIsPlayingChanged(isPlaying)
                 if (!isPlaying) UserStore.savePosition(playPosition(), player.currentPosition)
                 PlayerWidget.updateAll(this@PlaybackService)
             }
 
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                shake?.refresh()
                 if (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM) {
                     SleepTimer.onPausedAtEndOfTrack()
                 }
+            }
+
+            override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
+                if (reason == Player.DISCONTINUITY_REASON_SEEK) crossfade?.onSeek()
             }
 
             override fun onTimelineChanged(timeline: Timeline, reason: Int) {
@@ -220,6 +232,16 @@ class PlaybackService : MediaSessionService() {
                     .build(),
             ),
         )
+    }
+
+    /** Réglage « Secouer pour passer » changé depuis l'appli. */
+    fun applyShake() {
+        shake?.refresh()
+    }
+
+    /** Fondu enchaîné désactivé : on arrête un fondu en cours. */
+    fun applyCrossfade() {
+        if (!com.thousandlabs.tonedial.data.Features.crossfade.on) crossfade?.cancel()
     }
 
     fun applySkipSilence() {
@@ -306,6 +328,8 @@ class PlaybackService : MediaSessionService() {
             UserStore.savePosition(playPosition(), player.currentPosition)
         }
         SleepTimer.cancel()
+        crossfade?.release()
+        shake?.release()
         instance = null
         AudioFx.release()
         session?.run {

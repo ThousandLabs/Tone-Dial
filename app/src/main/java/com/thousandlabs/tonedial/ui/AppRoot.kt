@@ -48,6 +48,8 @@ sealed interface Screen {
     data object Settings : Screen
     data object Guide : Screen
     data object About : Screen
+    data class AnimeDetail(val name: String) : Screen
+    data object Recap : Screen
 }
 
 /** Actions et états communs transmis aux écrans. */
@@ -240,6 +242,8 @@ fun AppRoot(vm: MainViewModel) {
                         Screen.Settings -> SettingsScreen(vm, nav)
                         Screen.Guide -> GuideScreen(nav)
                         Screen.About -> AboutScreen(nav)
+                        is Screen.AnimeDetail -> AnimeDetailScreen(vm, nav, s.name)
+                        Screen.Recap -> RecapScreen(vm, nav)
                     }
                     }
                     if (selection.active) {

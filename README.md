@@ -33,12 +33,14 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 - Pochettes manquantes recherchées en ligne (Deezer, iTunes, MyAnimeList et AnimeThemes pour les openings) même avec des noms de fichiers abîmés, ou choisies dans la galerie ; fond du lecteur aux couleurs de la pochette
 - Vitesse de lecture de 0,5× à 2× sans changement de tonalité
 - Statistiques d'écoute (7 jours, 30 jours, depuis toujours)
+- Fondu enchaîné, secouer pour passer au titre suivant, onglet Animes, mix automatiques, bilan du mois partageable en image, traduction des paroles en français (chaque fonction activable dans les Réglages)
 - Sauvegarde complète en un seul fichier : playlists, favoris, écoutes et statistiques, paroles, corrections, pochettes et images, ordre des onglets et tous les réglages
 - Définir un titre comme sonnerie, partager ou supprimer un fichier, informations détaillées
 - Reprise automatique de la lecture là où elle s'était arrêtée
 
 ## Nouveautés
 
+- **1.45** : fondu enchaîné entre les titres (2 à 10 s) ; secouer le téléphone pour passer au titre suivant ou mettre en pause, avec vibration de confirmation ; onglet Animes (openings et endings regroupés par anime, avec affiche) ; mix automatiques « Vos titres du moment », « Oubliés depuis longtemps » et « À découvrir » ; bilan du mois partageable en image ; traduction des paroles en français. Chaque fonction s'active ou se désactive dans les Réglages.
 - **1.44** : les paroles collées ou saisies sans heures sont minutées automatiquement (heures de la version LRCLIB placées sur votre texte), pour retrouver le défilement et le karaoké ; nouveau mode « Synchroniser à la main » : un appui sur « Ligne suivante » au début de chaque ligne pendant l'écoute.
 - **1.43** : la file d'attente suit la lecture : quand le titre suivant arrive en bas de l'écran, la liste descend d'un cran toute seule. Elle ne remonte jamais d'elle-même et ne bouge pas pendant qu'on fait défiler ou qu'on déplace un titre.
 - **1.42** : essai gratuit mieux protégé : il est compté à partir de l'installation, et effacer les données de l'appli ne permet plus de le relancer.
@@ -95,6 +97,6 @@ Chaque modification publiée sur ce dépôt produit automatiquement une nouvelle
 
 - Kotlin, Jetpack Compose (Material 3), Media3 / ExoPlayer
 - Compilation et signature automatiques par GitHub Actions (`.github/workflows/build.yml`)
-- Aucune publicité. Internet sert uniquement aux mises à jour (GitHub), à la recherche de paroles (LRCLIB) et de pochettes (Deezer, iTunes, AnimeThemes) ; toutes les données restent sur le téléphone
+- Aucune publicité. Internet sert uniquement aux mises à jour (GitHub), à la recherche de paroles (LRCLIB) et de pochettes (Deezer, iTunes, AnimeThemes), à la traduction des paroles quand on la demande (Google Traduction) ; toutes les données restent sur le téléphone
 
 Site : [thousandlabs.github.io](https://thousandlabs.github.io)

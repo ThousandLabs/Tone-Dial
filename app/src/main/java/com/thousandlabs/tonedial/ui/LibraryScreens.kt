@@ -46,6 +46,7 @@ enum class HomeTab(val label: String) {
     ARTISTS("Artistes"),
     FOLDERS("Dossiers"),
     PLAYLISTS("Playlists"),
+    ANIMES("Animes"),
 }
 
 @Composable
@@ -56,7 +57,10 @@ fun rememberTabOrder(): List<HomeTab> {
         }
     }
     val names by com.thousandlabs.tonedial.data.UserStore.tabOrder.collectAsStateWithLifecycle()
+    // l'onglet Animes ne s'affiche que s'il est activé dans les réglages
+    val animes by com.thousandlabs.tonedial.data.Features.animeTab.state.collectAsStateWithLifecycle()
     return names.mapNotNull { n -> HomeTab.entries.firstOrNull { it.name == n } }.ifEmpty { HomeTab.entries }
+        .filter { animes || it != HomeTab.ANIMES }
 }
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -159,6 +163,7 @@ fun HomeScreen(vm: MainViewModel, nav: Nav) {
                 HomeTab.ARTISTS -> ArtistsTab(vm, nav)
                 HomeTab.FOLDERS -> FoldersTab(vm, nav)
                 HomeTab.PLAYLISTS -> PlaylistsTab(vm, nav)
+                HomeTab.ANIMES -> AnimesTab(vm, nav)
             }
         }
     }
@@ -322,6 +327,8 @@ private fun FoldersTab(vm: MainViewModel, nav: Nav) {
 private fun PlaylistsTab(vm: MainViewModel, nav: Nav) {
     val playlists by vm.playlists.collectAsStateWithLifecycle()
     val favorites by vm.favorites.collectAsStateWithLifecycle()
+    val mixesOn by com.thousandlabs.tonedial.data.Features.mixes.state.collectAsStateWithLifecycle()
+    val recapOn by com.thousandlabs.tonedial.data.Features.recap.state.collectAsStateWithLifecycle()
     var creating by remember { mutableStateOf(false) }
 
     if (creating) {
@@ -345,6 +352,26 @@ private fun PlaylistsTab(vm: MainViewModel, nav: Nav) {
                 onClick = { nav.go(Screen.AutoDetail(AutoList.RECENTLY_PLAYED)) })
             CollectionRow(null, Icons.Outlined.NewReleases, title = "Ajoutés récemment", subtitle = "Derniers fichiers téléchargés",
                 onClick = { nav.go(Screen.AutoDetail(AutoList.RECENTLY_ADDED)) })
+        }
+        if (mixesOn) {
+            item { SectionLabel("Mix") }
+            item {
+                CollectionRow(null, Icons.Outlined.Whatshot, title = AutoList.MIX_NOW.label, subtitle = "Vos plus écoutés des deux dernières semaines",
+                    onClick = { nav.go(Screen.AutoDetail(AutoList.MIX_NOW)) })
+                CollectionRow(null, Icons.Outlined.Restore, title = AutoList.MIX_FORGOTTEN.label, subtitle = "Souvent écoutés, plus du tout depuis un mois",
+                    onClick = { nav.go(Screen.AutoDetail(AutoList.MIX_FORGOTTEN)) })
+                CollectionRow(null, Icons.Outlined.Explore, title = AutoList.MIX_DISCOVER.label, subtitle = "Titres jamais écoutés, nouvelle sélection chaque jour",
+                    onClick = { nav.go(Screen.AutoDetail(AutoList.MIX_DISCOVER)) })
+                if (recapOn) {
+                    CollectionRow(null, Icons.Outlined.Insights, title = "Bilan du mois", subtitle = "Vos écoutes du mois, à partager en image",
+                        onClick = { nav.go(Screen.Recap) })
+                }
+            }
+        } else if (recapOn) {
+            item {
+                CollectionRow(null, Icons.Outlined.Insights, title = "Bilan du mois", subtitle = "Vos écoutes du mois, à partager en image",
+                    onClick = { nav.go(Screen.Recap) })
+            }
         }
         item {
             Row(Modifier.fillMaxWidth().padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -583,11 +610,17 @@ fun AutoDetailScreen(vm: MainViewModel, nav: Nav, kind: AutoList) {
         AutoList.MOST_PLAYED -> Icons.Outlined.TrendingUp
         AutoList.RECENTLY_PLAYED -> Icons.Outlined.History
         AutoList.RECENTLY_ADDED -> Icons.Outlined.NewReleases
+        AutoList.MIX_NOW -> Icons.Outlined.Whatshot
+        AutoList.MIX_FORGOTTEN -> Icons.Outlined.Restore
+        AutoList.MIX_DISCOVER -> Icons.Outlined.Explore
     }
     val empty = when (kind) {
         AutoList.FAVORITES -> "Aucun favori. Appuyez sur le cœur dans le lecteur pour en ajouter."
         AutoList.MOST_PLAYED, AutoList.RECENTLY_PLAYED -> "Écoutez quelques morceaux, ils apparaîtront ici."
         AutoList.RECENTLY_ADDED -> "Aucun titre."
+        AutoList.MIX_NOW -> "Écoutez quelques titres ces jours-ci, ils apparaîtront ici."
+        AutoList.MIX_FORGOTTEN -> "Aucun titre oublié : les titres souvent écoutés mais plus depuis un mois apparaîtront ici."
+        AutoList.MIX_DISCOVER -> "Vous avez déjà écouté tous vos titres."
     }
     val favSort = vm.favoritesSort()
     SongCollectionScreen(
@@ -983,6 +1016,9 @@ fun SettingsScreen(vm: MainViewModel, nav: Nav) {
                     "Ajoute les boutons Favori (cœur) et Aléatoire à la notification et à l'écran verrouillé.",
                     notifButtons,
                 ) { notifButtons = it; vm.setNotifButtons(it) }
+                PlaybackExtrasSettings()
+                SectionLabel("Fonctions")
+                FeatureSettings()
                 SectionLabel("Openings et endings")
                 val animeBatch by vm.animeBatch.collectAsStateWithLifecycle()
                 if (animeBatch.running) {
@@ -1021,6 +1057,10 @@ fun SettingsScreen(vm: MainViewModel, nav: Nav) {
                 BackupSettings(vm)
                 SectionLabel("Statistiques")
                 ListItemRow(Icons.Outlined.BarChart, "Statistiques d'écoute", subtitle = "Temps d'écoute, titres et artistes préférés", onClick = { nav.go(Screen.Stats) })
+                val recapOn by com.thousandlabs.tonedial.data.Features.recap.state.collectAsStateWithLifecycle()
+                if (recapOn) {
+                    ListItemRow(Icons.Outlined.Insights, "Bilan du mois", subtitle = "Titre, artiste et opening du mois, à partager en image", onClick = { nav.go(Screen.Recap) })
+                }
                 SectionLabel("Aide")
                 ListItemRow(Icons.Outlined.HelpOutline, "Guide d'utilisation", onClick = { nav.go(Screen.Guide) })
                 ListItemRow(Icons.Outlined.Info, "À propos et mises à jour", onClick = { nav.go(Screen.About) })
@@ -1266,6 +1306,7 @@ fun TabOrderDialog(current: List<HomeTab>, onDismiss: () -> Unit, onSave: (List<
                                 HomeTab.ARTISTS -> Icons.Outlined.Person
                                 HomeTab.FOLDERS -> Icons.Outlined.Folder
                                 HomeTab.PLAYLISTS -> Icons.Outlined.QueueMusic
+                                HomeTab.ANIMES -> Icons.Outlined.Movie
                             },
                             null,
                             tint = if (dragging) TdColors.Accent else TdColors.Text,

@@ -117,7 +117,7 @@ fun FolderFilterScreen(vm: MainViewModel, nav: Nav) {
 // Statistiques d'écoute
 // ------------------------------------------------------------------
 
-private fun formatListening(ms: Long): String {
+fun formatListening(ms: Long): String {
     val min = ms / 60_000
     val h = min / 60
     val m = min % 60
@@ -164,6 +164,11 @@ fun StatsScreen(vm: MainViewModel, nav: Nav) {
                     StatTile("Temps d'écoute", formatListening(stats.totalMs), Modifier.weight(1f))
                     StatTile("Écoutes", totalPlays.toString(), Modifier.weight(1f))
                     StatTile("Jours actifs", stats.activeDays.toString(), Modifier.weight(1f))
+                }
+            }
+            if (com.thousandlabs.tonedial.data.Features.recap.on) {
+                item {
+                    ListItemRow(Icons.Outlined.Insights, "Bilan du mois", subtitle = "Titre, artiste et opening du mois, à partager en image", onClick = { nav.go(Screen.Recap) })
                 }
             }
             if (stats.byDay.isNotEmpty() && stats.byDay.any { it.second > 0 }) {
@@ -218,7 +223,7 @@ fun StatsScreen(vm: MainViewModel, nav: Nav) {
 }
 
 @Composable
-private fun StatTile(label: String, value: String, modifier: Modifier = Modifier) {
+fun StatTile(label: String, value: String, modifier: Modifier = Modifier) {
     Column(
         modifier
             .clip(RoundedCornerShape(14.dp))

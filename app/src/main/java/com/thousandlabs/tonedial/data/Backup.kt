@@ -29,12 +29,12 @@ object Backup {
 
     /** Réglages numériques (la valeur n'est sauvegardée que si elle a été changée). */
     private val intKeys = listOf("eq_preset", "bass", "virtualizer", "min_duration_sec", "queue_repeat", "speed_pct", "lyrics_scale") +
-        (0 until 10).map { "eq_band_$it" }
+        (0 until 10).map { "eq_band_$it" } + Features.backupIntKeys
     /** Réglages oui / non (sauvegardés seulement s'ils ont été changés). */
     private val boolKeys = listOf(
         "eq_enabled", "smart_tags", "covers_auto", "update_auto", "tap_jump_queue", "lyrics_romaji", "notif_buttons",
         "lyrics_auto", "lyrics_karaoke", "resume_on_headset", "skip_silence",
-    )
+    ) + Features.backupBoolKeys
     private val stringKeys = listOf("artist_mode")
     private const val JSON_ENTRY = "tonedial.json"
 
