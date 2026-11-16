@@ -115,6 +115,10 @@ fun FeatureSettings() {
     SettingSwitch(Icons.Outlined.Insights, "Bilan du mois", "Vos titres, artistes et openings les plus écoutés du mois, à partager en image.", recap) {
         Features.recap.set(it)
     }
+    val sync by Features.lyricsAutoSync.state.collectAsStateWithLifecycle()
+    SettingSwitch(Icons.Outlined.Timer, "Recalage automatique des paroles", "Les paroles téléchargées sont recalées sur votre fichier : version la plus proche en durée, intro plus longue ou plus courte détectée à l'écoute du son.", sync) {
+        Features.lyricsAutoSync.set(it)
+    }
     val tr by Features.translate.state.collectAsStateWithLifecycle()
     SettingSwitch(Icons.Outlined.Translate, "Traduction des paroles", "Bouton « Traduire en français » sous les paroles. La traduction est gardée sur le téléphone.", tr) {
         Features.translate.set(it)

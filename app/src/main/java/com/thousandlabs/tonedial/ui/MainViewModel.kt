@@ -358,8 +358,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             com.thousandlabs.tonedial.data.Covers.markResolved(song.id)
             if (com.thousandlabs.tonedial.data.UserStore.customLyrics(song.id) == null) {
                 val updated = songMap.value[song.id] ?: song
-                val text = com.thousandlabs.tonedial.data.LyricsOnline.find(updated)
-                if (text != null) com.thousandlabs.tonedial.data.UserStore.setCustomLyrics(song.id, text, source = "lrclib")
+                com.thousandlabs.tonedial.data.LyricsSync.fetchAndSave(ctx, updated)
             }
             lyricsFor = null
             refreshPlayer()
@@ -1015,10 +1014,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (_lyricsSearching.value) return
         viewModelScope.launch {
             _lyricsSearching.value = true
-            val text = com.thousandlabs.tonedial.data.LyricsOnline.find(song)
+            val text = com.thousandlabs.tonedial.data.LyricsSync.fetchAndSave(ctx, song)
             _lyricsSearching.value = false
             if (text != null) {
-                UserStore.setCustomLyrics(song.id, text, source = "lrclib")
                 _lyricsNotFoundOnline.value = _lyricsNotFoundOnline.value - song.id
                 lyricsFor = null
                 refreshPlayer()
@@ -1045,8 +1043,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         saveLyrics(song, text)
     }
 
-    fun saveLyrics(song: Song, text: String, message: String? = null, autoTime: Boolean = true) {
+    fun saveLyrics(song: Song, text: String, message: String? = null, autoTime: Boolean = true, unsure: Boolean = false) {
         UserStore.setCustomLyrics(song.id, text)
+        // l'utilisateur a recalé ou modifié lui-même : le minutage n'est plus « à vérifier »
+        com.thousandlabs.tonedial.data.LyricsSync.setUnsure(song.id, unsure)
         if (text.isNotBlank() && lyricsFor == song.id) {
             // mise à jour immédiate, sans recharger (évite un clignotement pendant les réglages)
             _lyrics.value = LyricsLoader.parse(text, "Saisies dans l'appli")
@@ -1100,8 +1100,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val before = UserStore.customLyrics(song.id)
         viewModelScope.launch {
             _lyricsTiming.value = true
-            val reference = com.thousandlabs.tonedial.data.LyricsOnline.find(song)
-                ?.let { LyricsLoader.parse(it, "LRCLIB") }
+            var unsure = false
+            val reference = com.thousandlabs.tonedial.data.LyricsOnline.findDetailed(song)
+                ?.let { f ->
+                    val adj = com.thousandlabs.tonedial.data.LyricsSync.adjust(ctx, song, f.text, f.refDurationSec)
+                    unsure = adj.unsure
+                    LyricsLoader.parse(adj.text, "LRCLIB")
+                }
                 ?.takeIf { it.synced }
             val result = reference?.let {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
@@ -1123,6 +1128,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (result.approximate) "Minutage ajouté, approximatif par endroits : ajustez si besoin"
                 else "Paroles minutées automatiquement",
                 autoTime = false,
+                unsure = unsure,
             )
         }
     }

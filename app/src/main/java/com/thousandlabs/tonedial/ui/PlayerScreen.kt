@@ -432,6 +432,8 @@ private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long, isPlayi
                 val state = rememberLazyListState()
                 val speed by vm.speed.collectAsStateWithLifecycle()
                 val smoothPosition = rememberSmoothPosition(positionMs, isPlaying, speed)
+                // minutage déduit d'une version de durée différente, que le son n'a pas permis de confirmer
+                var unsureTiming by remember(song.id, l) { mutableStateOf(com.thousandlabs.tonedial.data.LyricsSync.isUnsure(song.id)) }
                 val activeIndex = if (l.synced) {
                     l.lines.indexOfLast { (it.timeMs ?: 0L) <= positionMs + 300 }.coerceAtLeast(0)
                 } else -1
@@ -520,6 +522,27 @@ private fun LyricsPanel(vm: MainViewModel, song: Song, positionMs: Long, isPlayi
                     contentPadding = PaddingValues(vertical = 24.dp, horizontal = 20.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
+                    if (l.synced && unsureTiming) {
+                        item {
+                            UnsureTimingBanner(
+                                onNow = {
+                                    val first = l.lines.firstOrNull { it.timeMs != null && it.text.isNotBlank() }?.timeMs
+                                    if (first != null) {
+                                        val text = com.thousandlabs.tonedial.data.LyricsTiming.shift(
+                                            com.thousandlabs.tonedial.data.LyricsTiming.toLrc(l), 0, smoothPosition.value - first,
+                                        )
+                                        vm.saveLyrics(song, text, "Paroles recalées sur la première ligne")
+                                    }
+                                    unsureTiming = false
+                                },
+                                onRestart = { vm.seekTo(0L) },
+                                onOk = {
+                                    com.thousandlabs.tonedial.data.LyricsSync.setUnsure(song.id, false)
+                                    unsureTiming = false
+                                },
+                            )
+                        }
+                    }
                     if (!l.synced) {
                         item {
                             UntimedBanner(
@@ -891,6 +914,48 @@ private fun TranslationLine(text: String?, scale: Float) {
 }
 
 /** Paroles sans heures : elles ne peuvent pas suivre la musique tant qu'on ne les a pas minutées. */
+@Composable
+private fun UnsureTimingBanner(onNow: () -> Unit, onRestart: () -> Unit, onOk: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(bottom = 16.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(TdColors.SurfaceHigh)
+            .padding(14.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.Timer, null, tint = TdColors.Accent, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Minutage à vérifier", style = MaterialTheme.typography.titleSmall)
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Votre fichier n'a pas la même durée que la version de ces paroles. Si elles sont décalées, touchez « Maintenant » au moment exact où la première ligne est chantée : tout le reste se recale.",
+            style = MaterialTheme.typography.bodySmall,
+            color = TdColors.TextDim,
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Button(
+                onClick = onNow,
+                colors = ButtonDefaults.buttonColors(containerColor = TdColors.Accent),
+                contentPadding = PaddingValues(horizontal = 12.dp),
+            ) {
+                Icon(Icons.Outlined.TouchApp, null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Maintenant")
+            }
+            OutlinedButton(onClick = onRestart, contentPadding = PaddingValues(horizontal = 10.dp)) {
+                Icon(Icons.Outlined.Replay, null, modifier = Modifier.size(16.dp), tint = TdColors.Text)
+                Spacer(Modifier.width(4.dp))
+                Text("Début", color = TdColors.Text)
+            }
+            TextButton(onClick = onOk, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("C'est bon") }
+        }
+    }
+}
+
 @Composable
 private fun UntimedBanner(timing: Boolean, onAuto: () -> Unit, onManual: () -> Unit) {
     Column(

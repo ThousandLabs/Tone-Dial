@@ -26,7 +26,7 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 - Égaliseur avec préréglages, amplificateur de basses et effet d'espace, option « Sauter les silences »
 - Boutons Favori et Aléatoire dans la notification, reprise automatique en branchant des écouteurs ou le Bluetooth
 - Bibliothèque mise à jour automatiquement, titres masqués un par un, recherche des titres en double
-- Paroles : intégrées au fichier (MP3, FLAC), fichier `.lrc`, recherche automatique sur LRCLIB, recherche Google et collage, avec défilement synchronisé ; minutage automatique des paroles collées et synchronisation à la main
+- Paroles : intégrées au fichier (MP3, FLAC), fichier `.lrc`, recherche automatique sur LRCLIB, recherche Google et collage, avec défilement synchronisé ; minutage automatique des paroles collées, recalage automatique sur votre fichier (intro plus longue ou plus courte) et synchronisation à la main
 - Minuterie de sommeil (durée ou fin du titre), avec baisse progressive du son
 - Widget d'écran d'accueil et raccourcis sur l'icône (Aléatoire, Reprendre, Rechercher)
 - Dossiers masqués (audios WhatsApp, enregistrements…), correction manuelle des informations sans modifier les fichiers
@@ -40,6 +40,7 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 
 ## Nouveautés
 
+- **1.46** : paroles bien plus souvent synchronisées dès le départ : la version dont la durée colle le mieux à votre fichier est choisie en priorité, et quand votre fichier est plus long ou plus court (clip avec intro, version longue ou raccourcie), Tone Dial écoute le son pour trouver où se trouve la différence et recale les paroles tout seul. Si le doute reste, un bandeau « Minutage à vérifier » permet de tout recaler d'un seul appui sur la première ligne. Réglage « Recalage automatique des paroles ».
 - **1.45** : fondu enchaîné entre les titres (2 à 10 s) ; secouer le téléphone pour passer au titre suivant ou mettre en pause, avec vibration de confirmation ; onglet Animes (openings et endings regroupés par anime, avec affiche) ; mix automatiques « Vos titres du moment », « Oubliés depuis longtemps » et « À découvrir » ; bilan du mois partageable en image ; traduction des paroles en français. Chaque fonction s'active ou se désactive dans les Réglages.
 - **1.44** : les paroles collées ou saisies sans heures sont minutées automatiquement (heures de la version LRCLIB placées sur votre texte), pour retrouver le défilement et le karaoké ; nouveau mode « Synchroniser à la main » : un appui sur « Ligne suivante » au début de chaque ligne pendant l'écoute.
 - **1.43** : la file d'attente suit la lecture : quand le titre suivant arrive en bas de l'écran, la liste descend d'un cran toute seule. Elle ne remonte jamais d'elle-même et ne bouge pas pendant qu'on fait défiler ou qu'on déplace un titre.

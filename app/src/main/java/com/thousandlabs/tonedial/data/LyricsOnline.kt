@@ -58,12 +58,18 @@ object LyricsOnline {
     private fun tokens(t: String): Set<String> =
         CoverSearch.norm(t).split(' ').filter { it.length > 1 || it.firstOrNull()?.isDigit() == true }.toSet()
 
+    /** Paroles trouvées, avec la durée (en secondes) de la version de la chanson sur laquelle elles sont calées. */
+    data class Found(val text: String, val refDurationSec: Double)
+
+    /** Renvoie seulement le texte des paroles trouvées (voir [findDetailed]). */
+    suspend fun find(original: Song): String? = findDetailed(original)?.text
+
     /**
      * Renvoie les paroles trouvées (format .lrc si synchronisées), ou null.
      * Essaie plusieurs formulations : nom nettoyé, chanson officielle retrouvée sur Deezer
      * (ou AnimeThemes pour les openings), puis titre raccourci.
      */
-    suspend fun find(original: Song): String? = withContext(Dispatchers.IO) {
+    suspend fun findDetailed(original: Song): Found? = withContext(Dispatchers.IO) {
         val key = TagCleaner.searchKey(original)
         val song = original.copy(
             title = key.title,
@@ -79,7 +85,7 @@ object LyricsOnline {
         val reference = HashSet(tokens("${song.title} ${song.artist} $fileName"))
 
         val romaji = preferRomaji()
-        fun tryResults(results: List<JSONObject>, extraRef: Set<String> = emptySet(), latinOnly: Boolean = false): String? {
+        fun tryResults(results: List<JSONObject>, extraRef: Set<String> = emptySet(), latinOnly: Boolean = false): Found? {
             val ref = reference + extraRef
             var best: JSONObject? = null
             var bestScore = 0.0
@@ -103,10 +109,12 @@ object LyricsOnline {
                 var score = titleRatio * 4 + (if (artistOk) 3 else 0) + (if (synced != null) 2 else 0)
                 // version transcrite en romaji préférée à l'écriture japonaise
                 if (transcribed) score += 4
+                // la version dont la durée colle le mieux à votre fichier est presque toujours la bonne
                 score += when {
-                    diff <= 3 -> 3.0
-                    diff <= 8 -> 2.0
-                    diff <= 20 -> 1.0
+                    diff <= 2 -> 5.0
+                    diff <= 5 -> 3.5
+                    diff <= 10 -> 2.0
+                    diff <= 25 -> 1.0
                     else -> 0.0
                 }
                 if (score > bestScore) {
@@ -118,13 +126,16 @@ object LyricsOnline {
             val synced = b.optString("syncedLyrics").takeIf { !b.isNull("syncedLyrics") && it.isNotBlank() }
             val plain = b.optString("plainLyrics").takeIf { !b.isNull("plainLyrics") && it.isNotBlank() }
             val d = b.optDouble("duration", -1.0)
-            // paroles synchronisées seulement si la durée correspond (sinon le défilement serait décalé)
-            val syncOk = d <= 0 || durationSec <= 0 || kotlin.math.abs(d - durationSec) <= 8
-            return if (synced != null && (syncOk || plain == null)) synced else plain ?: synced
+            // Durée différente (version clip, intro plus longue…) : on garde quand même les paroles
+            // synchronisées, elles seront recalées sur votre fichier (voir LyricsSync).
+            // Au-delà d'une minute et demie d'écart, c'est sans doute un autre montage : texte simple.
+            val syncOk = d <= 0 || durationSec <= 0 || kotlin.math.abs(d - durationSec) <= 90
+            val text = if (synced != null && (syncOk || plain == null)) synced else plain ?: synced
+            return text?.let { Found(it, d) }
         }
 
         var identity: CoverSearch.Identity? = null
-        val found: String? = run {
+        val found: Found? = run {
         // 1. titre et artiste nettoyés
         if (artist != null && title.isNotBlank()) {
             tryResults(search("track_name=${enc(title)}&artist_name=${enc(artist)}"))?.let { return@run it }
@@ -153,7 +164,7 @@ object LyricsOnline {
         }
 
         // 4. paroles en japonais : on cherche une version déjà transcrite en romaji sur LRCLIB
-        if (found != null && romaji && isJapanese(found)) {
+        if (found != null && romaji && isJapanese(found.text)) {
             val id = identity ?: runCatching { CoverSearch.identify(song) }.getOrNull()
             val extra = id?.let { tokens("${it.title} ${it.artist}") }.orEmpty()
             val bases = LinkedHashSet<String>()

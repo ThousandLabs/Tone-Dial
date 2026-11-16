@@ -26,6 +26,8 @@ object Features {
     val mixes = Toggle("feat_mixes", true)
     /** Bilan du mois. */
     val recap = Toggle("feat_recap", true)
+    /** Recalage automatique des paroles téléchargées sur la durée et le son de chaque fichier. */
+    val lyricsAutoSync = Toggle("feat_lyrics_sync", true)
     /** Traduction des paroles en français. */
     val translate = Toggle("feat_translate", true)
     /** Fondu enchaîné entre les titres. */
@@ -48,6 +50,6 @@ object Features {
     fun setShakeAction(v: Int) = UserStore.putInt("shake_action", v.coerceIn(0, 1))
 
     /** Réglages oui / non à inclure dans la sauvegarde. */
-    val backupBoolKeys = listOf("feat_anime_tab", "feat_mixes", "feat_recap", "feat_translate", "crossfade", "shake", "shake_vibrate", "lyrics_tr_show")
+    val backupBoolKeys = listOf("feat_anime_tab", "feat_mixes", "feat_recap", "feat_translate", "feat_lyrics_sync", "crossfade", "shake", "shake_vibrate", "lyrics_tr_show")
     val backupIntKeys = listOf("crossfade_sec", "shake_sens", "shake_action")
 }

@@ -40,9 +40,8 @@ object LyricsBatch {
                 if (!isActive) return@launch
                 val has = runCatching { LyricsLoader.load(app, song) }.getOrNull()?.lines?.isNotEmpty() == true
                 if (!has) {
-                    val text = LyricsOnline.find(song)
+                    val text = LyricsSync.fetchAndSave(app, song)
                     if (text != null) {
-                        UserStore.setCustomLyrics(song.id, text, source = "lrclib")
                         missing -= song.id
                         found++
                     } else missing += song.id
@@ -73,11 +72,8 @@ object LyricsBatch {
             var found = 0
             list.forEachIndexed { i, song ->
                 if (!isActive) return@launch
-                val text = LyricsOnline.find(song)
-                if (text != null && LyricsOnline.looksRomaji(text)) {
-                    UserStore.setCustomLyrics(song.id, text, source = "lrclib")
-                    found++
-                }
+                val text = LyricsSync.fetchAndSave(context.applicationContext, song) { LyricsOnline.looksRomaji(it) }
+                if (text != null) found++
                 delay(350)
                 _progress.value = Progress(running = true, done = i + 1, total = list.size, found = found)
             }

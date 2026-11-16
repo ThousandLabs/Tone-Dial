@@ -115,7 +115,7 @@ object OpeningsBatch {
                 if (!isActive) return@launch
                 val r = runCatching { CoverSearch.identify(song) }.getOrNull()
                 if (r != null && r.artist.isNotBlank()) {
-                    apply(song, r)
+                    apply(app, song, r)
                     found++
                 } else {
                     mark(song.id, null)
@@ -131,15 +131,14 @@ object OpeningsBatch {
     }
 
     /** Artiste (le titre reste tel quel), pochette et paroles. */
-    private suspend fun apply(song: Song, id: CoverSearch.Identity) {
+    private suspend fun apply(context: Context, song: Song, id: CoverSearch.Identity) {
         LibraryPrefs.setOverride(song.id, LibraryPrefs.Override(null, id.artist, null))
         mark(song.id, id.artist)
         _applied.tryEmit(song.id)
         id.image?.let { if (!Covers.hasCustom(song.id)) runCatching { Covers.saveSongImage(song.id, it) } }
         Covers.markResolved(song.id)
         if (UserStore.customLyrics(song.id) == null) {
-            val text = runCatching { LyricsOnline.find(LibraryPrefs.apply(song)) }.getOrNull()
-            if (text != null) UserStore.setCustomLyrics(song.id, text, source = "lrclib")
+            runCatching { LyricsSync.fetchAndSave(context, LibraryPrefs.apply(song)) }
         }
         _applied.tryEmit(song.id)
     }
