@@ -7,7 +7,7 @@ Lecteur de musique Android hors ligne et sans publicité. Une application **Thou
 ## Prix et activation
 
 - **Essai gratuit de 48 h**, avec toutes les fonctions, compté à partir de l'installation (effacer les données de l'appli ne le relance pas).
-- Ensuite **1 000 F, une seule fois** (sans abonnement) : paiement Wave, Orange Money (71 121 65 81) ou espèces, puis code d'activation envoyé sur WhatsApp.
+- Ensuite **1 000 F, une seule fois** (sans abonnement) : paiement Wave ou Orange Money au 78 145 66 70, ou espèces, puis code d'activation envoyé sur WhatsApp.
 - Le code est lié au téléphone et gardé pour toujours : plus besoin de le saisir, même après une mise à jour ou une réinstallation sur le même téléphone.
 - Site officiel : https://thousandlabs.github.io
 

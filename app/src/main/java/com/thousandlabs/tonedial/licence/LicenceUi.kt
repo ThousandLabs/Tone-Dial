@@ -147,15 +147,24 @@ fun ActivationPanel(onActivated: () -> Unit) {
             color = TdColors.TextDim, style = MaterialTheme.typography.bodySmall,
         )
         Spacer(Modifier.height(10.dp))
+        Text(
+            "Envoyez ${Licence.PRICE} par Wave ou Orange Money au :",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Text(
+            Licence.PAY_FMT,
+            style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(vertical = 4.dp),
+        )
         Button(
-            onClick = { open(c, Licence.WAVE_URL) },
+            onClick = { copy(c, Licence.PAY) },
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(containerColor = TdColors.Accent),
         ) {
-            Icon(Icons.Outlined.Payments, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Payer avec Wave")
+            Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Copier le numéro")
         }
         Text(
-            "Orange Money : ${Licence.PHONE_FMT} · ou en espèces, en main propre.",
+            "Ou en espèces, en main propre.",
             color = TdColors.TextDim, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp),
         )
         Spacer(Modifier.height(14.dp))

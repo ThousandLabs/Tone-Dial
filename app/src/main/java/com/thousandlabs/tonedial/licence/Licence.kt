@@ -38,7 +38,9 @@ object Licence {
     private const val PUB_Y = "VyK9a5CTwUJ_M-9-p1d139cCmpPWqA4lCezIp352Nt4"
 
     const val PRICE = "1 000 F"
-    const val WAVE_URL = "https://pay.wave.com/m/M_sn_2435mflS4o9D/c/sn/"
+    /** Numéro qui reçoit les paiements Wave et Orange Money de Thousand Labs (séparé du WhatsApp). */
+    const val PAY = "781456670"
+    const val PAY_FMT = "78 145 66 70"
     const val WHATSAPP = "221711216581"
     const val PHONE_FMT = "71 121 65 81"
     const val TRIAL_MS = 48L * 3600 * 1000
